@@ -33,6 +33,7 @@ private:
     };
 
     juce::Rectangle<int> chartBounds() const;
+    juce::Rectangle<float> plotBounds() const;
     juce::Point<float> pointToPosition(const pointdrone::controller::ChartPointViewModel& point) const;
     std::optional<pointdrone::controller::ChartPointViewModel> hitTestPoint(juce::Point<float> position) const;
     juce::Point<float> normalizedPosition(juce::Point<float> position) const;

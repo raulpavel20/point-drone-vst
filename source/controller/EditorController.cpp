@@ -11,6 +11,7 @@ namespace
 {
 constexpr int previewSampleCount = 192;
 constexpr float previewCycles = 2.0f;
+constexpr double previewSampleRate = 44100.0;
 
 juce::String frequencyText(const std::optional<pointdrone::domain::PointModel>& point)
 {
@@ -42,12 +43,30 @@ std::optional<pointdrone::domain::PointModel> selectedPointFromModel(const point
     return std::nullopt;
 }
 
-float mixWeightTotal(const pointdrone::domain::WaveMix& waveMix)
+float triangleSample(const float sawSample)
 {
-    return juce::jmax(0.0f, waveMix.sine)
-         + juce::jmax(0.0f, waveMix.saw)
-         + juce::jmax(0.0f, waveMix.square)
-         + juce::jmax(0.0f, waveMix.noise);
+    return 1.0f - 2.0f * std::abs(sawSample);
+}
+
+float pulseWidth(const float rawPulseWidth)
+{
+    return juce::jmap(juce::jlimit(0.0f, 1.0f, rawPulseWidth), 0.0f, 1.0f, 0.1f, 0.9f);
+}
+
+float noiseCutoffHz(const float rawNoiseTone)
+{
+    return std::exp(juce::jmap(juce::jlimit(0.0f, 1.0f, rawNoiseTone),
+                               0.0f,
+                               1.0f,
+                               std::log(120.0f),
+                               std::log(18000.0f)));
+}
+
+float lowPassNoise(const float input, const float cutoffHz, float& state)
+{
+    const auto coefficient = std::exp(-juce::MathConstants<double>::twoPi * static_cast<double>(cutoffHz) / previewSampleRate);
+    state = static_cast<float>((1.0 - coefficient) * static_cast<double>(input) + coefficient * static_cast<double>(state));
+    return state;
 }
 }
 
@@ -103,6 +122,14 @@ void EditorController::handlePointDoubleClicked(const juce::String& pointId)
         selectedPointId.clear();
 }
 
+void EditorController::handleWaveTimbreChanged(const pointdrone::domain::WaveTimbre& waveTimbre)
+{
+    syncSelectionWithState();
+
+    if (selectedPointId.isNotEmpty())
+        state.updatePointWaveTimbre(selectedPointId, waveTimbre);
+}
+
 void EditorController::handleWaveMixChanged(const pointdrone::domain::WaveMix& waveMix)
 {
     syncSelectionWithState();
@@ -154,8 +181,8 @@ PointWavePreviewViewModel EditorController::createWavePreviewViewModel(const poi
     viewModel.hasSelection = true;
     viewModel.samples.reserve(previewSampleCount);
 
-    const auto total = mixWeightTotal(selectedPoint->waveMix);
     juce::Random random(selectedPoint->id.hashCode64());
+    float filteredNoise = 0.0f;
 
     for (int sampleIndex = 0; sampleIndex < previewSampleCount; ++sampleIndex)
     {
@@ -168,23 +195,18 @@ PointWavePreviewViewModel EditorController::createWavePreviewViewModel(const poi
 
         float mixedSample = 0.0f;
 
-        if (total > 0.0f)
-        {
-            const auto normalizedSine = selectedPoint->waveMix.sine / total;
-            const auto normalizedSaw = selectedPoint->waveMix.saw / total;
-            const auto normalizedSquare = selectedPoint->waveMix.square / total;
-            const auto normalizedNoise = selectedPoint->waveMix.noise / total;
+        const auto rawSawSample = (wrappedPhase / juce::MathConstants<float>::pi) - 1.0f;
+        const auto sineSample = std::sin(wrappedPhase + selectedPoint->waveTimbre.sinePhase * juce::MathConstants<float>::twoPi);
+        const auto sawSample = rawSawSample + selectedPoint->waveTimbre.sawShape * (triangleSample(rawSawSample) - rawSawSample);
+        const auto squareSample = wrappedPhase < pulseWidth(selectedPoint->waveTimbre.squarePulseWidth) * juce::MathConstants<float>::twoPi ? 1.0f : -1.0f;
+        const auto noiseSample = lowPassNoise(random.nextFloat() * 2.0f - 1.0f,
+                                              noiseCutoffHz(selectedPoint->waveTimbre.noiseTone),
+                                              filteredNoise);
 
-            const auto sineSample = std::sin(wrappedPhase);
-            const auto sawSample = (wrappedPhase / juce::MathConstants<float>::pi) - 1.0f;
-            const auto squareSample = wrappedPhase < juce::MathConstants<float>::pi ? 1.0f : -1.0f;
-            const auto noiseSample = random.nextFloat() * 2.0f - 1.0f;
-
-            mixedSample = (normalizedSine * sineSample)
-                        + (normalizedSaw * sawSample)
-                        + (normalizedSquare * squareSample)
-                        + (normalizedNoise * noiseSample);
-        }
+        mixedSample = (selectedPoint->waveMix.sine * sineSample)
+                    + (selectedPoint->waveMix.saw * sawSample)
+                    + (selectedPoint->waveMix.square * squareSample)
+                    + (selectedPoint->waveMix.noise * noiseSample);
 
         viewModel.samples.push_back(juce::jlimit(-1.0f, 1.0f, mixedSample * selectedPoint->gain));
     }
@@ -198,6 +220,7 @@ InspectorViewModel EditorController::createInspectorViewModel(const pointdrone::
 
     InspectorViewModel viewModel;
     viewModel.hasSelection = selectedPoint.has_value();
+    viewModel.waveTimbre = selectedPoint.has_value() ? selectedPoint->waveTimbre : pointdrone::domain::WaveTimbre {};
     viewModel.waveMix = selectedPoint.has_value() ? selectedPoint->waveMix : pointdrone::domain::WaveMix {};
     viewModel.gain = selectedPoint.has_value() ? selectedPoint->gain : 1.0f;
     viewModel.frequencyText = frequencyText(selectedPoint);

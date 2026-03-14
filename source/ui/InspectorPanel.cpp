@@ -7,11 +7,33 @@
 namespace pointdrone::ui
 {
 InspectorPanel::InspectorPanel()
+    : waveTimbreSliders({ "[PHASE]", "[SHAPE]", "[WIDTH]", "[TONE]" }),
+      waveMixSliders({ "[SINE]", "[SAW]", "[SQUARE]", "[NOISE]" })
 {
-    waveMixSliders.onWaveMixChanged = [this](const pointdrone::domain::WaveMix& waveMix)
+    waveTimbreSliders.onValuesChanged = [this](const WaveMixSliders::SliderValues& values)
+    {
+        if (onWaveTimbreChanged != nullptr)
+        {
+            onWaveTimbreChanged({
+                values[0],
+                values[1],
+                values[2],
+                values[3]
+            });
+        }
+    };
+
+    waveMixSliders.onValuesChanged = [this](const WaveMixSliders::SliderValues& values)
     {
         if (onWaveMixChanged != nullptr)
-            onWaveMixChanged(waveMix);
+        {
+            onWaveMixChanged({
+                values[0],
+                values[1],
+                values[2],
+                values[3]
+            });
+        }
     };
 
     gainLabel.setText("[GAIN]", juce::dontSendNotification);
@@ -29,9 +51,11 @@ InspectorPanel::InspectorPanel()
             onGainChanged(static_cast<float>(gainSlider.getValue()));
     };
 
+    addAndMakeVisible(waveTimbreSliders);
     addAndMakeVisible(waveMixSliders);
     addAndMakeVisible(gainLabel);
     addAndMakeVisible(gainSlider);
+    waveTimbreSliders.setEnabledState(false);
     waveMixSliders.setEnabledState(false);
     gainSlider.setEnabled(false);
 }
@@ -61,8 +85,6 @@ void InspectorPanel::paint(juce::Graphics& graphics)
     graphics.setFont(14.0f);
     graphics.drawFittedText(viewModel.frequencyText, contentBounds.removeFromTop(22), juce::Justification::centredLeft, 1);
     graphics.drawFittedText(viewModel.panText, contentBounds.removeFromTop(22), juce::Justification::centredLeft, 1);
-    contentBounds.removeFromTop(12);
-    graphics.drawFittedText("[WAVE MIX]", contentBounds.removeFromTop(20), juce::Justification::centredLeft, 1);
 }
 
 void InspectorPanel::resized()
@@ -71,6 +93,10 @@ void InspectorPanel::resized()
     bounds.removeFromTop(110);
 
     auto gainBounds = bounds.removeFromRight(48);
+    auto rowGap = 16;
+    auto rowHeight = (bounds.getHeight() - rowGap) / 2;
+    waveTimbreSliders.setBounds(bounds.removeFromTop(rowHeight));
+    bounds.removeFromTop(rowGap);
     waveMixSliders.setBounds(bounds);
     gainLabel.setBounds(gainBounds.removeFromBottom(24));
     gainSlider.setBounds(gainBounds.reduced(6, 0));
@@ -80,8 +106,20 @@ void InspectorPanel::setViewModel(pointdrone::controller::InspectorViewModel new
 {
     viewModel = std::move(newViewModel);
     const juce::ScopedValueSetter<bool> setter(updatingFromState, true);
+    waveTimbreSliders.setEnabledState(viewModel.hasSelection);
+    waveTimbreSliders.setValues({
+        viewModel.waveTimbre.sinePhase,
+        viewModel.waveTimbre.sawShape,
+        viewModel.waveTimbre.squarePulseWidth,
+        viewModel.waveTimbre.noiseTone
+    });
     waveMixSliders.setEnabledState(viewModel.hasSelection);
-    waveMixSliders.setWaveMix(viewModel.waveMix);
+    waveMixSliders.setValues({
+        viewModel.waveMix.sine,
+        viewModel.waveMix.saw,
+        viewModel.waveMix.square,
+        viewModel.waveMix.noise
+    });
     gainSlider.setEnabled(viewModel.hasSelection);
     gainSlider.setValue(viewModel.gain, juce::dontSendNotification);
     gainLabel.setColour(juce::Label::textColourId, viewModel.hasSelection ? pointdrone::core::Theme::text() : pointdrone::core::Theme::muted());

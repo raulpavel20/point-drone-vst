@@ -16,6 +16,7 @@ public:
     void handlePointClicked(const juce::String& pointId);
     void handlePointDragged(const juce::String& pointId, float normalizedX, float normalizedY);
     void handlePointDoubleClicked(const juce::String& pointId);
+    void handleWaveTimbreChanged(const pointdrone::domain::WaveTimbre& waveTimbre);
     void handleWaveMixChanged(const pointdrone::domain::WaveMix& waveMix);
     void handleGainChanged(float gain);
 

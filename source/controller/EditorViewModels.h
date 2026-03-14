@@ -28,6 +28,7 @@ struct PointWavePreviewViewModel
 struct InspectorViewModel
 {
     bool hasSelection = false;
+    pointdrone::domain::WaveTimbre waveTimbre;
     pointdrone::domain::WaveMix waveMix;
     float gain = 1.0f;
     juce::String frequencyText = "[FREQ --]";

@@ -17,6 +17,7 @@ public:
     bool removePoint(const juce::String& pointId);
     bool updatePointPosition(const juce::String& pointId, float frequencyHz, float pan);
     bool updatePointGain(const juce::String& pointId, float gain);
+    bool updatePointWaveTimbre(const juce::String& pointId, const domain::WaveTimbre& waveTimbre);
     bool updatePointWaveMix(const juce::String& pointId, const domain::WaveMix& waveMix);
     bool containsPoint(const juce::String& pointId) const;
 
@@ -33,6 +34,10 @@ private:
     static juce::Identifier frequencyProperty();
     static juce::Identifier panProperty();
     static juce::Identifier gainProperty();
+    static juce::Identifier sinePhaseProperty();
+    static juce::Identifier sawShapeProperty();
+    static juce::Identifier squarePulseWidthProperty();
+    static juce::Identifier noiseToneProperty();
     static juce::Identifier sineProperty();
     static juce::Identifier sawProperty();
     static juce::Identifier squareProperty();

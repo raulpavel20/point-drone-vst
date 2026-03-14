@@ -4,16 +4,50 @@
 
 namespace pointdrone::audio
 {
+namespace
+{
+float triangleSample(const float sawSample)
+{
+    return 1.0f - 2.0f * std::abs(sawSample);
+}
+
+float pulseWidth(const float rawPulseWidth)
+{
+    return juce::jmap(juce::jlimit(0.0f, 1.0f, rawPulseWidth), 0.0f, 1.0f, 0.1f, 0.9f);
+}
+
+float noiseCutoffHz(const float rawNoiseTone)
+{
+    return std::exp(juce::jmap(juce::jlimit(0.0f, 1.0f, rawNoiseTone),
+                               0.0f,
+                               1.0f,
+                               std::log(120.0f),
+                               std::log(18000.0f)));
+}
+
+float lowPassNoise(const float input, const float cutoffHz, const double sampleRate, float& state)
+{
+    const auto coefficient = std::exp(-juce::MathConstants<double>::twoPi * static_cast<double>(cutoffHz) / sampleRate);
+    state = static_cast<float>((1.0 - coefficient) * static_cast<double>(input) + coefficient * static_cast<double>(state));
+    return state;
+}
+}
+
 void PointVoice::prepare(const double newSampleRate)
 {
     sampleRate = newSampleRate;
     frequencyHz.reset(sampleRate, 0.03);
     pan.reset(sampleRate, 0.03);
     gain.reset(sampleRate, 0.03);
+    sinePhase.reset(sampleRate, 0.03);
+    sawShape.reset(sampleRate, 0.03);
+    squarePulseWidth.reset(sampleRate, 0.03);
+    noiseTone.reset(sampleRate, 0.03);
     sine.reset(sampleRate, 0.03);
     saw.reset(sampleRate, 0.03);
     square.reset(sampleRate, 0.03);
     noise.reset(sampleRate, 0.03);
+    filteredNoise = 0.0f;
     prepared = false;
 }
 
@@ -24,6 +58,10 @@ void PointVoice::render(juce::AudioBuffer<float>& outputBuffer, const int numSam
         frequencyHz.setCurrentAndTargetValue(point.frequencyHz);
         pan.setCurrentAndTargetValue(point.pan);
         gain.setCurrentAndTargetValue(point.gain);
+        sinePhase.setCurrentAndTargetValue(point.waveTimbre.sinePhase);
+        sawShape.setCurrentAndTargetValue(point.waveTimbre.sawShape);
+        squarePulseWidth.setCurrentAndTargetValue(point.waveTimbre.squarePulseWidth);
+        noiseTone.setCurrentAndTargetValue(point.waveTimbre.noiseTone);
         sine.setCurrentAndTargetValue(point.waveMix.sine);
         saw.setCurrentAndTargetValue(point.waveMix.saw);
         square.setCurrentAndTargetValue(point.waveMix.square);
@@ -34,6 +72,10 @@ void PointVoice::render(juce::AudioBuffer<float>& outputBuffer, const int numSam
     frequencyHz.setTargetValue(point.frequencyHz);
     pan.setTargetValue(point.pan);
     gain.setTargetValue(point.gain);
+    sinePhase.setTargetValue(point.waveTimbre.sinePhase);
+    sawShape.setTargetValue(point.waveTimbre.sawShape);
+    squarePulseWidth.setTargetValue(point.waveTimbre.squarePulseWidth);
+    noiseTone.setTargetValue(point.waveTimbre.noiseTone);
     sine.setTargetValue(point.waveMix.sine);
     saw.setTargetValue(point.waveMix.saw);
     square.setTargetValue(point.waveMix.square);
@@ -53,28 +95,27 @@ void PointVoice::render(juce::AudioBuffer<float>& outputBuffer, const int numSam
         const auto sawLevel = saw.getNextValue();
         const auto squareLevel = square.getNextValue();
         const auto noiseLevel = noise.getNextValue();
-
-        const auto total = mixWeightTotal({ sineLevel, sawLevel, squareLevel, noiseLevel });
+        const auto currentSinePhase = sinePhase.getNextValue();
+        const auto currentSawShape = sawShape.getNextValue();
+        const auto currentSquarePulseWidth = squarePulseWidth.getNextValue();
+        const auto currentNoiseTone = noiseTone.getNextValue();
 
         float mixedSample = 0.0f;
 
-        if (total > 0.0f)
-        {
-            const auto normalizedSine = sineLevel / total;
-            const auto normalizedSaw = sawLevel / total;
-            const auto normalizedSquare = squareLevel / total;
-            const auto normalizedNoise = noiseLevel / total;
+        const auto wrappedPhase = std::fmod(static_cast<float>(phase), juce::MathConstants<float>::twoPi);
+        const auto rawSawSample = (wrappedPhase / juce::MathConstants<float>::pi) - 1.0f;
+        const auto sineSample = std::sin(wrappedPhase + currentSinePhase * juce::MathConstants<float>::twoPi);
+        const auto sawSample = rawSawSample + currentSawShape * (triangleSample(rawSawSample) - rawSawSample);
+        const auto squareSample = wrappedPhase < pulseWidth(currentSquarePulseWidth) * juce::MathConstants<float>::twoPi ? 1.0f : -1.0f;
+        const auto noiseSample = lowPassNoise(random.nextFloat() * 2.0f - 1.0f,
+                                              noiseCutoffHz(currentNoiseTone),
+                                              sampleRate,
+                                              filteredNoise);
 
-            const auto sineSample = std::sin(static_cast<float>(phase));
-            const auto sawSample = static_cast<float>((phase / juce::MathConstants<double>::pi) - 1.0);
-            const auto squareSample = phase < juce::MathConstants<double>::pi ? 1.0f : -1.0f;
-            const auto noiseSample = random.nextFloat() * 2.0f - 1.0f;
-
-            mixedSample = (normalizedSine * sineSample)
-                        + (normalizedSaw * sawSample)
-                        + (normalizedSquare * squareSample)
-                        + (normalizedNoise * noiseSample);
-        }
+        mixedSample = (sineLevel * sineSample)
+                    + (sawLevel * sawSample)
+                    + (squareLevel * squareSample)
+                    + (noiseLevel * noiseSample);
 
         mixedSample *= 0.18f * gain.getNextValue();
 
@@ -92,14 +133,6 @@ void PointVoice::render(juce::AudioBuffer<float>& outputBuffer, const int numSam
         while (phase >= juce::MathConstants<double>::twoPi)
             phase -= juce::MathConstants<double>::twoPi;
     }
-}
-
-float PointVoice::mixWeightTotal(const domain::WaveMix& waveMix)
-{
-    return juce::jmax(0.0f, waveMix.sine)
-         + juce::jmax(0.0f, waveMix.saw)
-         + juce::jmax(0.0f, waveMix.square)
-         + juce::jmax(0.0f, waveMix.noise);
 }
 
 float PointVoice::panLeftGain(const float panValue)

@@ -4,20 +4,24 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include <array>
+
 namespace pointdrone::ui
 {
 class WaveMixSliders : public juce::Component
 {
 public:
-    WaveMixSliders();
+    using SliderValues = std::array<float, 4>;
+
+    explicit WaveMixSliders(std::array<juce::String, 4> labels);
 
     void resized() override;
 
-    void setWaveMix(const pointdrone::domain::WaveMix& waveMix);
-    pointdrone::domain::WaveMix getWaveMix() const;
+    void setValues(const SliderValues& values);
+    SliderValues getValues() const;
     void setEnabledState(bool shouldBeEnabled);
 
-    std::function<void(pointdrone::domain::WaveMix)> onWaveMixChanged;
+    std::function<void(SliderValues)> onValuesChanged;
 
 private:
     void configureSlider(juce::Slider& slider);

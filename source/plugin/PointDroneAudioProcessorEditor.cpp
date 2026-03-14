@@ -43,6 +43,12 @@ PointDroneAudioProcessorEditor::PointDroneAudioProcessorEditor(PointDroneAudioPr
         refreshViews();
     };
 
+    inspectorPanel.onWaveTimbreChanged = [this](const pointdrone::domain::WaveTimbre& waveTimbre)
+    {
+        controller.handleWaveTimbreChanged(waveTimbre);
+        refreshViews();
+    };
+
     inspectorPanel.onGainChanged = [this](const float gain)
     {
         controller.handleGainChanged(gain);

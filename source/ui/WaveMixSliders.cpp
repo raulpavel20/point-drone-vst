@@ -4,12 +4,12 @@
 
 namespace pointdrone::ui
 {
-WaveMixSliders::WaveMixSliders()
+WaveMixSliders::WaveMixSliders(std::array<juce::String, 4> labels)
 {
-    sineLabel.setText("[SINE]", juce::dontSendNotification);
-    sawLabel.setText("[SAW]", juce::dontSendNotification);
-    squareLabel.setText("[SQUARE]", juce::dontSendNotification);
-    noiseLabel.setText("[NOISE]", juce::dontSendNotification);
+    sineLabel.setText(labels[0], juce::dontSendNotification);
+    sawLabel.setText(labels[1], juce::dontSendNotification);
+    squareLabel.setText(labels[2], juce::dontSendNotification);
+    noiseLabel.setText(labels[3], juce::dontSendNotification);
 
     for (auto* label : { &sineLabel, &sawLabel, &squareLabel, &noiseLabel })
     {
@@ -42,23 +42,21 @@ void WaveMixSliders::resized()
     layoutColumn(remaining, noiseSlider, noiseLabel);
 }
 
-void WaveMixSliders::setWaveMix(const pointdrone::domain::WaveMix& waveMix)
+void WaveMixSliders::setValues(const SliderValues& values)
 {
     const juce::ScopedValueSetter<bool> setter(updatingFromState, true);
-    sineSlider.setValue(waveMix.sine, juce::dontSendNotification);
-    sawSlider.setValue(waveMix.saw, juce::dontSendNotification);
-    squareSlider.setValue(waveMix.square, juce::dontSendNotification);
-    noiseSlider.setValue(waveMix.noise, juce::dontSendNotification);
+    sineSlider.setValue(values[0], juce::dontSendNotification);
+    sawSlider.setValue(values[1], juce::dontSendNotification);
+    squareSlider.setValue(values[2], juce::dontSendNotification);
+    noiseSlider.setValue(values[3], juce::dontSendNotification);
 }
 
-pointdrone::domain::WaveMix WaveMixSliders::getWaveMix() const
+WaveMixSliders::SliderValues WaveMixSliders::getValues() const
 {
-    return {
-        static_cast<float>(sineSlider.getValue()),
-        static_cast<float>(sawSlider.getValue()),
-        static_cast<float>(squareSlider.getValue()),
-        static_cast<float>(noiseSlider.getValue())
-    };
+    return { static_cast<float>(sineSlider.getValue()),
+             static_cast<float>(sawSlider.getValue()),
+             static_cast<float>(squareSlider.getValue()),
+             static_cast<float>(noiseSlider.getValue()) };
 }
 
 void WaveMixSliders::setEnabledState(const bool shouldBeEnabled)
@@ -88,7 +86,7 @@ void WaveMixSliders::handleSliderChange()
     if (updatingFromState)
         return;
 
-    if (onWaveMixChanged != nullptr)
-        onWaveMixChanged(getWaveMix());
+    if (onValuesChanged != nullptr)
+        onValuesChanged(getValues());
 }
 }

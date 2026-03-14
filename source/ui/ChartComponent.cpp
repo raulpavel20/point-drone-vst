@@ -18,10 +18,10 @@ void ChartComponent::paint(juce::Graphics& graphics)
     auto bounds = chartBounds();
     auto topBounds = bounds.removeFromTop(22);
     auto bottomBounds = bounds.removeFromBottom(22);
-    const auto plotBounds = bounds.toFloat();
+    const auto currentPlotBounds = bounds.toFloat();
 
     graphics.setColour(pointdrone::core::Theme::outline());
-    graphics.drawRect(plotBounds, 1.0f);
+    graphics.drawRect(currentPlotBounds, 1.0f);
 
     graphics.setColour(pointdrone::core::Theme::muted());
     graphics.setFont(13.0f);
@@ -32,11 +32,11 @@ void ChartComponent::paint(juce::Graphics& graphics)
     graphics.setColour(pointdrone::core::Theme::muted().withAlpha(0.5f));
     for (const auto frequency : { 55.0f, 110.0f, 220.0f, 440.0f, 880.0f, 1760.0f })
     {
-        const auto x = plotBounds.getX() + pointdrone::core::frequencyToX(static_cast<float>(frequency)) * plotBounds.getWidth();
-        graphics.drawVerticalLine(juce::roundToInt(x), plotBounds.getY(), plotBounds.getBottom());
+        const auto x = currentPlotBounds.getX() + pointdrone::core::frequencyToX(static_cast<float>(frequency)) * currentPlotBounds.getWidth();
+        graphics.drawVerticalLine(juce::roundToInt(x), currentPlotBounds.getY(), currentPlotBounds.getBottom());
     }
 
-    graphics.drawHorizontalLine(juce::roundToInt(plotBounds.getCentreY()), plotBounds.getX(), plotBounds.getRight());
+    graphics.drawHorizontalLine(juce::roundToInt(currentPlotBounds.getCentreY()), currentPlotBounds.getX(), currentPlotBounds.getRight());
 
     for (const auto& point : viewModel.points)
     {
@@ -53,13 +53,13 @@ void ChartComponent::paint(juce::Graphics& graphics)
 
 void ChartComponent::mouseDown(const juce::MouseEvent& event)
 {
-    const auto plotBounds = chartBounds().toFloat();
+    const auto currentPlotBounds = plotBounds();
 
     draggedPointId.reset();
     dragStartPosition.reset();
     dragAxisLock = DragAxisLock::none;
 
-    if (! plotBounds.contains(event.position))
+    if (! currentPlotBounds.contains(event.position))
         return;
 
     if (const auto hitPoint = hitTestPoint(event.position); hitPoint.has_value())
@@ -72,8 +72,8 @@ void ChartComponent::mouseDown(const juce::MouseEvent& event)
     }
     else
     {
-        const auto normalizedX = (event.position.x - plotBounds.getX()) / plotBounds.getWidth();
-        const auto normalizedY = (event.position.y - plotBounds.getY()) / plotBounds.getHeight();
+        const auto normalizedX = (event.position.x - currentPlotBounds.getX()) / currentPlotBounds.getWidth();
+        const auto normalizedY = (event.position.y - currentPlotBounds.getY()) / currentPlotBounds.getHeight();
 
         if (onBackgroundClicked != nullptr)
             onBackgroundClicked(normalizedX, normalizedY);
@@ -116,9 +116,9 @@ void ChartComponent::mouseDrag(const juce::MouseEvent& event)
 
 void ChartComponent::mouseDoubleClick(const juce::MouseEvent& event)
 {
-    const auto plotBounds = chartBounds().toFloat();
+    const auto currentPlotBounds = plotBounds();
 
-    if (! plotBounds.contains(event.position))
+    if (! currentPlotBounds.contains(event.position))
         return;
 
     const auto hitPoint = hitTestPoint(event.position);
@@ -150,12 +150,20 @@ juce::Rectangle<int> ChartComponent::chartBounds() const
     return getLocalBounds().reduced(12, 12);
 }
 
+juce::Rectangle<float> ChartComponent::plotBounds() const
+{
+    auto bounds = chartBounds();
+    bounds.removeFromTop(22);
+    bounds.removeFromBottom(22);
+    return bounds.toFloat();
+}
+
 juce::Point<float> ChartComponent::pointToPosition(const pointdrone::controller::ChartPointViewModel& point) const
 {
-    const auto plotBounds = chartBounds().toFloat();
+    const auto currentPlotBounds = plotBounds();
     return {
-        plotBounds.getX() + point.normalizedX * plotBounds.getWidth(),
-        plotBounds.getY() + point.normalizedY * plotBounds.getHeight()
+        currentPlotBounds.getX() + point.normalizedX * currentPlotBounds.getWidth(),
+        currentPlotBounds.getY() + point.normalizedY * currentPlotBounds.getHeight()
     };
 }
 
@@ -172,11 +180,11 @@ std::optional<pointdrone::controller::ChartPointViewModel> ChartComponent::hitTe
 
 juce::Point<float> ChartComponent::normalizedPosition(const juce::Point<float> position) const
 {
-    const auto plotBounds = chartBounds().toFloat();
+    const auto currentPlotBounds = plotBounds();
 
     return {
-        (position.x - plotBounds.getX()) / plotBounds.getWidth(),
-        (position.y - plotBounds.getY()) / plotBounds.getHeight()
+        (position.x - currentPlotBounds.getX()) / currentPlotBounds.getWidth(),
+        (position.y - currentPlotBounds.getY()) / currentPlotBounds.getHeight()
     };
 }
 }

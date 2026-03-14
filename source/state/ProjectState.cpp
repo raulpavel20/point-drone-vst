@@ -84,6 +84,25 @@ bool ProjectState::updatePointGain(const juce::String& pointId, const float gain
     return false;
 }
 
+bool ProjectState::updatePointWaveTimbre(const juce::String& pointId, const domain::WaveTimbre& waveTimbre)
+{
+    const juce::ScopedLock lock(mutex);
+
+    for (auto pointTree : pointsTree())
+    {
+        if (pointTree.getProperty(idProperty()).toString() != pointId)
+            continue;
+
+        pointTree.setProperty(sinePhaseProperty(), waveTimbre.sinePhase, nullptr);
+        pointTree.setProperty(sawShapeProperty(), waveTimbre.sawShape, nullptr);
+        pointTree.setProperty(squarePulseWidthProperty(), waveTimbre.squarePulseWidth, nullptr);
+        pointTree.setProperty(noiseToneProperty(), waveTimbre.noiseTone, nullptr);
+        return true;
+    }
+
+    return false;
+}
+
 bool ProjectState::updatePointWaveMix(const juce::String& pointId, const domain::WaveMix& waveMix)
 {
     const juce::ScopedLock lock(mutex);
@@ -137,6 +156,10 @@ juce::Identifier ProjectState::idProperty() { return "id"; }
 juce::Identifier ProjectState::frequencyProperty() { return "frequencyHz"; }
 juce::Identifier ProjectState::panProperty() { return "pan"; }
 juce::Identifier ProjectState::gainProperty() { return "gain"; }
+juce::Identifier ProjectState::sinePhaseProperty() { return "sinePhase"; }
+juce::Identifier ProjectState::sawShapeProperty() { return "sawShape"; }
+juce::Identifier ProjectState::squarePulseWidthProperty() { return "squarePulseWidth"; }
+juce::Identifier ProjectState::noiseToneProperty() { return "noiseTone"; }
 juce::Identifier ProjectState::sineProperty() { return "sine"; }
 juce::Identifier ProjectState::sawProperty() { return "saw"; }
 juce::Identifier ProjectState::squareProperty() { return "square"; }
@@ -150,6 +173,10 @@ domain::PointModel ProjectState::pointFromValueTree(const juce::ValueTree& point
     point.frequencyHz = static_cast<float>(pointTree.getProperty(frequencyProperty()));
     point.pan = static_cast<float>(pointTree.getProperty(panProperty()));
     point.gain = static_cast<float>(pointTree.getProperty(gainProperty(), 1.0f));
+    point.waveTimbre.sinePhase = static_cast<float>(pointTree.getProperty(sinePhaseProperty(), 0.0f));
+    point.waveTimbre.sawShape = static_cast<float>(pointTree.getProperty(sawShapeProperty(), 0.0f));
+    point.waveTimbre.squarePulseWidth = static_cast<float>(pointTree.getProperty(squarePulseWidthProperty(), 0.5f));
+    point.waveTimbre.noiseTone = static_cast<float>(pointTree.getProperty(noiseToneProperty(), 0.0f));
     point.waveMix.sine = static_cast<float>(pointTree.getProperty(sineProperty()));
     point.waveMix.saw = static_cast<float>(pointTree.getProperty(sawProperty()));
     point.waveMix.square = static_cast<float>(pointTree.getProperty(squareProperty()));
@@ -164,6 +191,10 @@ juce::ValueTree ProjectState::pointToValueTree(const domain::PointModel& point)
     pointTree.setProperty(frequencyProperty(), point.frequencyHz, nullptr);
     pointTree.setProperty(panProperty(), point.pan, nullptr);
     pointTree.setProperty(gainProperty(), point.gain, nullptr);
+    pointTree.setProperty(sinePhaseProperty(), point.waveTimbre.sinePhase, nullptr);
+    pointTree.setProperty(sawShapeProperty(), point.waveTimbre.sawShape, nullptr);
+    pointTree.setProperty(squarePulseWidthProperty(), point.waveTimbre.squarePulseWidth, nullptr);
+    pointTree.setProperty(noiseToneProperty(), point.waveTimbre.noiseTone, nullptr);
     pointTree.setProperty(sineProperty(), point.waveMix.sine, nullptr);
     pointTree.setProperty(sawProperty(), point.waveMix.saw, nullptr);
     pointTree.setProperty(squareProperty(), point.waveMix.square, nullptr);
