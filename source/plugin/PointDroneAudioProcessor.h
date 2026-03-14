@@ -5,6 +5,9 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include <array>
+#include <atomic>
+
 namespace pointdrone::plugin
 {
 class PointDroneAudioProcessor : public juce::AudioProcessor
@@ -36,8 +39,13 @@ public:
     void setStateInformation(const void* data, int sizeInBytes) override;
 
     pointdrone::state::ProjectState& getProjectState();
+    std::array<float, 2> getOutputMeterLevels() const;
 
 private:
+    std::atomic<float> leftMeterLevel = 0.0f;
+    std::atomic<float> rightMeterLevel = 0.0f;
+    float smoothedLeftMeterLevel = 0.0f;
+    float smoothedRightMeterLevel = 0.0f;
     pointdrone::state::ProjectState projectState;
     pointdrone::audio::PointRenderer renderer;
 };

@@ -37,10 +37,16 @@ struct InspectorViewModel
     juce::String panText = "[PAN --]";
 };
 
+struct MasterOutputViewModel
+{
+    float gain = 1.0f;
+};
+
 struct EditorViewState
 {
     ChartViewModel chart;
     PointWavePreviewViewModel wavePreview;
     InspectorViewModel inspector;
+    MasterOutputViewModel masterOutput;
 };
 }

@@ -219,7 +219,8 @@ EditorViewState EditorController::getViewState()
     return {
         createChartViewModel(model, selectedPointId),
         createWavePreviewViewModel(model, selectedPointId),
-        createInspectorViewModel(model, selectedPointId)
+        createInspectorViewModel(model, selectedPointId),
+        createMasterOutputViewModel(model)
     };
 }
 
@@ -279,6 +280,11 @@ void EditorController::handleGainChanged(const float gain)
 
     if (selectedPointId.isNotEmpty())
         state.updatePointGain(selectedPointId, gain);
+}
+
+void EditorController::handleOutputGainChanged(const float gain)
+{
+    state.updateOutputGain(gain);
 }
 
 void EditorController::handleSnapAllPointsToSemitone()
@@ -404,6 +410,13 @@ InspectorViewModel EditorController::createInspectorViewModel(const pointdrone::
     viewModel.gain = selectedPoint.has_value() ? selectedPoint->gain : 1.0f;
     viewModel.frequencyText = frequencyText(selectedPoint);
     viewModel.panText = panText(selectedPoint);
+    return viewModel;
+}
+
+MasterOutputViewModel EditorController::createMasterOutputViewModel(const pointdrone::domain::ProjectModel& model)
+{
+    MasterOutputViewModel viewModel;
+    viewModel.gain = model.outputGain;
     return viewModel;
 }
 }

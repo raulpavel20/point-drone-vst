@@ -12,6 +12,7 @@ domain::ProjectModel ProjectState::getModel() const
     const juce::ScopedLock lock(mutex);
 
     domain::ProjectModel model;
+    model.outputGain = static_cast<float>(rootState.getProperty(outputGainProperty(), 1.0f));
 
     for (const auto pointTree : pointsTree())
         model.points.push_back(pointFromValueTree(pointTree));
@@ -66,6 +67,13 @@ bool ProjectState::updatePointPosition(const juce::String& pointId, const float 
     }
 
     return false;
+}
+
+bool ProjectState::updateOutputGain(const float outputGain)
+{
+    const juce::ScopedLock lock(mutex);
+    rootState.setProperty(outputGainProperty(), outputGain, nullptr);
+    return true;
 }
 
 bool ProjectState::updatePointGain(const juce::String& pointId, const float gain)
@@ -155,6 +163,7 @@ juce::Identifier ProjectState::snapshotType() { return "SNAPSHOT"; }
 juce::Identifier ProjectState::idProperty() { return "id"; }
 juce::Identifier ProjectState::frequencyProperty() { return "frequencyHz"; }
 juce::Identifier ProjectState::panProperty() { return "pan"; }
+juce::Identifier ProjectState::outputGainProperty() { return "outputGain"; }
 juce::Identifier ProjectState::gainProperty() { return "gain"; }
 juce::Identifier ProjectState::sinePhaseProperty() { return "sinePhase"; }
 juce::Identifier ProjectState::sawShapeProperty() { return "sawShape"; }
@@ -232,6 +241,7 @@ juce::ValueTree ProjectState::snapshotToValueTree(const domain::SnapshotModel& s
 juce::ValueTree ProjectState::createDefaultState()
 {
     juce::ValueTree project(projectType());
+    project.setProperty(outputGainProperty(), 1.0f, nullptr);
     project.appendChild(juce::ValueTree(pointsType()), nullptr);
     project.appendChild(juce::ValueTree(snapshotsType()), nullptr);
     return project;

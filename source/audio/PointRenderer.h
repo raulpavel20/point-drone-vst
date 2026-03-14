@@ -18,6 +18,7 @@ public:
 private:
     double currentSampleRate = 44100.0;
     bool hasPrepared = false;
+    juce::SmoothedValue<float> outputGain;
     std::unordered_map<std::string, PointVoice> voices;
 };
 }

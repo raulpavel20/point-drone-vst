@@ -12,6 +12,10 @@ PointDroneAudioProcessor::PointDroneAudioProcessor()
 void PointDroneAudioProcessor::prepareToPlay(const double sampleRate, const int samplesPerBlock)
 {
     renderer.prepare(sampleRate, samplesPerBlock);
+    leftMeterLevel.store(0.0f);
+    rightMeterLevel.store(0.0f);
+    smoothedLeftMeterLevel = 0.0f;
+    smoothedRightMeterLevel = 0.0f;
 }
 
 void PointDroneAudioProcessor::releaseResources()
@@ -27,6 +31,19 @@ void PointDroneAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
 {
     juce::ScopedNoDenormals noDenormals;
     renderer.render(projectState.getModel(), buffer);
+
+    const auto leftPeak = buffer.getNumChannels() > 0 ? buffer.getMagnitude(0, 0, buffer.getNumSamples()) : 0.0f;
+    const auto rightPeak = buffer.getNumChannels() > 1 ? buffer.getMagnitude(1, 0, buffer.getNumSamples()) : leftPeak;
+
+    smoothedLeftMeterLevel = leftPeak > smoothedLeftMeterLevel
+        ? leftPeak
+        : juce::jmax(leftPeak, smoothedLeftMeterLevel * 0.92f);
+    smoothedRightMeterLevel = rightPeak > smoothedRightMeterLevel
+        ? rightPeak
+        : juce::jmax(rightPeak, smoothedRightMeterLevel * 0.92f);
+
+    leftMeterLevel.store(smoothedLeftMeterLevel);
+    rightMeterLevel.store(smoothedRightMeterLevel);
 }
 
 juce::AudioProcessorEditor* PointDroneAudioProcessor::createEditor()
@@ -106,6 +123,11 @@ void PointDroneAudioProcessor::setStateInformation(const void* data, const int s
 pointdrone::state::ProjectState& PointDroneAudioProcessor::getProjectState()
 {
     return projectState;
+}
+
+std::array<float, 2> PointDroneAudioProcessor::getOutputMeterLevels() const
+{
+    return { leftMeterLevel.load(), rightMeterLevel.load() };
 }
 }
 

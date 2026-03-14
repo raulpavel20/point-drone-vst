@@ -72,6 +72,16 @@ PointDroneAudioProcessorEditor::PointDroneAudioProcessorEditor(PointDroneAudioPr
         refreshViews();
     };
 
+    masterOutputStrip.onGainChanged = [this](const float gain)
+    {
+        controller.handleOutputGainChanged(gain);
+        refreshViews();
+    };
+    masterOutputStrip.setMeterSupplier([&audioProcessor]
+    {
+        return audioProcessor.getOutputMeterLevels();
+    });
+
     inspectorPanel.onFrequencyInputSubmitted = [this](juce::String text)
     {
         const auto accepted = controller.handleFrequencyInputSubmitted(text);
@@ -95,10 +105,11 @@ PointDroneAudioProcessorEditor::PointDroneAudioProcessorEditor(PointDroneAudioPr
     addAndMakeVisible(chartComponent);
     addAndMakeVisible(pointWavePreview);
     addAndMakeVisible(inspectorPanel);
+    addAndMakeVisible(masterOutputStrip);
     addAndMakeVisible(snapToSemitoneButton);
     snapToSemitoneButton.toFront(false);
 
-    setSize(1080, 620);
+    setSize(1160, 620);
     refreshViews();
 }
 
@@ -125,10 +136,13 @@ void PointDroneAudioProcessorEditor::resized()
     auto bounds = getLocalBounds().reduced(16);
     bounds.removeFromTop(56);
 
+    auto masterOutputBounds = bounds.removeFromRight(56);
+    bounds.removeFromRight(12);
     auto inspectorBounds = bounds.removeFromRight(300);
     auto previewBounds = bounds.removeFromRight(110);
     auto chartBounds = bounds;
     snapToSemitoneButton.setBounds(chartBounds.getX() + 12, chartBounds.getY() + 10, 24, 24);
+    masterOutputStrip.setBounds(masterOutputBounds);
     inspectorPanel.setBounds(inspectorBounds);
     pointWavePreview.setBounds(previewBounds);
     chartComponent.setBounds(chartBounds);
@@ -140,5 +154,6 @@ void PointDroneAudioProcessorEditor::refreshViews()
     chartComponent.setViewModel(std::move(viewState.chart));
     pointWavePreview.setViewModel(std::move(viewState.wavePreview));
     inspectorPanel.setViewModel(std::move(viewState.inspector));
+    masterOutputStrip.setViewModel(std::move(viewState.masterOutput));
 }
 }
