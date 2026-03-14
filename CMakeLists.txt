@@ -1,0 +1,91 @@
+cmake_minimum_required(VERSION 3.22)
+
+project(point_drone_vst VERSION 0.1.0)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS deployment version")
+
+add_subdirectory(JUCE)
+
+juce_add_binary_data(PointDroneAssets
+    SOURCES
+        assets/Manrope-VariableFont_wght.ttf
+)
+
+juce_add_plugin(PointDrone
+    COMPANY_NAME "PointDrone"
+    BUNDLE_ID "com.pointdrone.vst"
+    PLUGIN_MANUFACTURER_CODE Ptdr
+    PLUGIN_CODE Ptd1
+    FORMATS AU VST3 Standalone
+    PRODUCT_NAME "Point Drone"
+    IS_SYNTH TRUE
+    NEEDS_MIDI_INPUT FALSE
+    NEEDS_MIDI_OUTPUT FALSE
+    IS_MIDI_EFFECT FALSE
+    EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+    COPY_PLUGIN_AFTER_BUILD FALSE
+    VST3_CATEGORIES Instrument Synth
+)
+
+juce_generate_juce_header(PointDrone)
+
+target_sources(PointDrone
+    PRIVATE
+        source/audio/PointRenderer.cpp
+        source/audio/PointRenderer.h
+        source/audio/PointVoice.cpp
+        source/audio/PointVoice.h
+        source/controller/EditorController.cpp
+        source/controller/EditorController.h
+        source/controller/EditorViewModels.h
+        source/core/ChartMapping.h
+        source/core/Theme.h
+        source/domain/PointModel.h
+        source/domain/ProjectModel.h
+        source/domain/SnapshotModel.h
+        source/plugin/PointDroneAudioProcessor.cpp
+        source/plugin/PointDroneAudioProcessor.h
+        source/plugin/PointDroneAudioProcessorEditor.cpp
+        source/plugin/PointDroneAudioProcessorEditor.h
+        source/state/ProjectState.cpp
+        source/state/ProjectState.h
+        source/ui/AppLookAndFeel.cpp
+        source/ui/AppLookAndFeel.h
+        source/ui/ChartComponent.cpp
+        source/ui/ChartComponent.h
+        source/ui/InspectorPanel.cpp
+        source/ui/InspectorPanel.h
+        source/ui/WaveMixSliders.cpp
+        source/ui/WaveMixSliders.h
+)
+
+target_include_directories(PointDrone
+    PRIVATE
+        source
+)
+
+target_link_libraries(PointDrone
+    PRIVATE
+        PointDroneAssets
+        juce::juce_audio_basics
+        juce::juce_audio_processors
+        juce::juce_audio_utils
+        juce::juce_dsp
+        juce::juce_events
+        juce::juce_graphics
+        juce::juce_gui_basics
+        juce::juce_gui_extra
+    PUBLIC
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_lto_flags
+        juce::juce_recommended_warning_flags
+)
+
+target_compile_definitions(PointDrone
+    PUBLIC
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+        JUCE_VST3_CAN_REPLACE_VST2=0
+)
