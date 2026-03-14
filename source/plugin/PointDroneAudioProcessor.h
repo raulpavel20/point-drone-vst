@@ -1,12 +1,14 @@
 #pragma once
 
 #include "../audio/PointRenderer.h"
+#include "../audio/PointRuntimeTelemetry.h"
 #include "../state/ProjectState.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include <array>
 #include <atomic>
+#include <optional>
 
 namespace pointdrone::plugin
 {
@@ -40,6 +42,7 @@ public:
 
     pointdrone::state::ProjectState& getProjectState();
     std::array<float, 2> getOutputMeterLevels() const;
+    std::optional<pointdrone::audio::PointRuntimeTelemetry> getPointRuntimeTelemetry(const juce::String& pointId) const;
 
 private:
     std::atomic<float> leftMeterLevel = 0.0f;

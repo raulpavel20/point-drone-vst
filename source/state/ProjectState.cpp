@@ -2,6 +2,23 @@
 
 namespace pointdrone::state
 {
+namespace
+{
+juce::ValueTree findModulationTree(const juce::ValueTree& pointTree, const juce::Identifier modulationsType, const juce::Identifier targetProperty, const domain::ModulationTarget target)
+{
+    if (const auto modulationsTree = pointTree.getChildWithName(modulationsType); modulationsTree.isValid())
+    {
+        for (const auto modulationTree : modulationsTree)
+        {
+            if (static_cast<int>(modulationTree.getProperty(targetProperty, -1)) == static_cast<int>(target))
+                return modulationTree;
+        }
+    }
+
+    return {};
+}
+}
+
 ProjectState::ProjectState()
     : rootState(createDefaultState())
 {
@@ -92,6 +109,51 @@ bool ProjectState::updatePointGain(const juce::String& pointId, const float gain
     return false;
 }
 
+bool ProjectState::updatePointModulationEnabled(const juce::String& pointId, const domain::ModulationTarget target, const bool enabled)
+{
+    const juce::ScopedLock lock(mutex);
+
+    for (auto pointTree : pointsTree())
+    {
+        if (pointTree.getProperty(idProperty()).toString() != pointId)
+            continue;
+
+        if (auto modulationTree = findModulationTree(pointTree, modulationsType(), targetProperty(), target); modulationTree.isValid())
+        {
+            modulationTree.setProperty(enabledProperty(), enabled, nullptr);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool ProjectState::updatePointModulationSettings(const juce::String& pointId,
+                                                 const domain::ModulationTarget target,
+                                                 const domain::ModulationSettings& settings)
+{
+    const juce::ScopedLock lock(mutex);
+
+    for (auto pointTree : pointsTree())
+    {
+        if (pointTree.getProperty(idProperty()).toString() != pointId)
+            continue;
+
+        if (auto modulationTree = findModulationTree(pointTree, modulationsType(), targetProperty(), target); modulationTree.isValid())
+        {
+            modulationTree.setProperty(amplitudeProperty(), settings.amplitude, nullptr);
+            modulationTree.setProperty(modulationFrequencyProperty(), settings.frequency, nullptr);
+            modulationTree.setProperty(easeProperty(), settings.ease, nullptr);
+            modulationTree.setProperty(slantProperty(), settings.slant, nullptr);
+            modulationTree.setProperty(cyclicProperty(), settings.cyclic, nullptr);
+            modulationTree.setProperty(jitterProperty(), settings.jitter, nullptr);
+            return true;
+        }
+    }
+
+    return false;
+}
+
 bool ProjectState::updatePointWaveTimbre(const juce::String& pointId, const domain::WaveTimbre& waveTimbre)
 {
     const juce::ScopedLock lock(mutex);
@@ -158,9 +220,19 @@ void ProjectState::replaceState(const juce::ValueTree& newState)
 juce::Identifier ProjectState::projectType() { return "PROJECT"; }
 juce::Identifier ProjectState::pointsType() { return "POINTS"; }
 juce::Identifier ProjectState::pointType() { return "POINT"; }
+juce::Identifier ProjectState::modulationsType() { return "MODULATIONS"; }
+juce::Identifier ProjectState::modulationType() { return "MODULATION"; }
 juce::Identifier ProjectState::snapshotsType() { return "SNAPSHOTS"; }
 juce::Identifier ProjectState::snapshotType() { return "SNAPSHOT"; }
 juce::Identifier ProjectState::idProperty() { return "id"; }
+juce::Identifier ProjectState::targetProperty() { return "target"; }
+juce::Identifier ProjectState::enabledProperty() { return "enabled"; }
+juce::Identifier ProjectState::amplitudeProperty() { return "amplitude"; }
+juce::Identifier ProjectState::modulationFrequencyProperty() { return "modulationFrequency"; }
+juce::Identifier ProjectState::easeProperty() { return "ease"; }
+juce::Identifier ProjectState::slantProperty() { return "slant"; }
+juce::Identifier ProjectState::cyclicProperty() { return "cyclic"; }
+juce::Identifier ProjectState::jitterProperty() { return "jitter"; }
 juce::Identifier ProjectState::frequencyProperty() { return "frequencyHz"; }
 juce::Identifier ProjectState::panProperty() { return "pan"; }
 juce::Identifier ProjectState::outputGainProperty() { return "outputGain"; }
@@ -190,10 +262,31 @@ domain::PointModel ProjectState::pointFromValueTree(const juce::ValueTree& point
     point.waveMix.saw = static_cast<float>(pointTree.getProperty(sawProperty()));
     point.waveMix.square = static_cast<float>(pointTree.getProperty(squareProperty()));
     point.waveMix.noise = static_cast<float>(pointTree.getProperty(noiseProperty()));
+
+    if (const auto modulationsTree = pointTree.getChildWithName(modulationsType()); modulationsTree.isValid())
+    {
+        for (const auto modulationTree : modulationsTree)
+        {
+            const auto targetValue = static_cast<int>(modulationTree.getProperty(targetProperty(), -1));
+
+            if (targetValue < 0 || targetValue >= static_cast<int>(domain::modulationTargetCount))
+                continue;
+
+            auto& modulation = point.modulations[static_cast<std::size_t>(targetValue)];
+            modulation.enabled = static_cast<bool>(modulationTree.getProperty(enabledProperty(), false));
+            modulation.settings.amplitude = static_cast<float>(modulationTree.getProperty(amplitudeProperty(), 0.15f));
+            modulation.settings.frequency = static_cast<float>(modulationTree.getProperty(modulationFrequencyProperty(), 0.25f));
+            modulation.settings.ease = static_cast<float>(modulationTree.getProperty(easeProperty(), 0.5f));
+            modulation.settings.slant = static_cast<float>(modulationTree.getProperty(slantProperty(), 0.5f));
+            modulation.settings.cyclic = static_cast<float>(modulationTree.getProperty(cyclicProperty(), 0.0f));
+            modulation.settings.jitter = static_cast<float>(modulationTree.getProperty(jitterProperty(), 0.0f));
+        }
+    }
+
     return point;
 }
 
-juce::ValueTree ProjectState::pointToValueTree(const domain::PointModel& point)
+juce::ValueTree ProjectState::pointToValueTree(const domain::PointModel& point, const bool includeModulationEnabled)
 {
     juce::ValueTree pointTree(pointType());
     pointTree.setProperty(idProperty(), point.id, nullptr);
@@ -208,6 +301,28 @@ juce::ValueTree ProjectState::pointToValueTree(const domain::PointModel& point)
     pointTree.setProperty(sawProperty(), point.waveMix.saw, nullptr);
     pointTree.setProperty(squareProperty(), point.waveMix.square, nullptr);
     pointTree.setProperty(noiseProperty(), point.waveMix.noise, nullptr);
+
+    juce::ValueTree modulationsTree(modulationsType());
+
+    for (const auto target : domain::allModulationTargets)
+    {
+        const auto& modulation = domain::modulationFor(point, target);
+        juce::ValueTree modulationTree(modulationType());
+        modulationTree.setProperty(targetProperty(), static_cast<int>(target), nullptr);
+
+        if (includeModulationEnabled)
+            modulationTree.setProperty(enabledProperty(), modulation.enabled, nullptr);
+
+        modulationTree.setProperty(amplitudeProperty(), modulation.settings.amplitude, nullptr);
+        modulationTree.setProperty(modulationFrequencyProperty(), modulation.settings.frequency, nullptr);
+        modulationTree.setProperty(easeProperty(), modulation.settings.ease, nullptr);
+        modulationTree.setProperty(slantProperty(), modulation.settings.slant, nullptr);
+        modulationTree.setProperty(cyclicProperty(), modulation.settings.cyclic, nullptr);
+        modulationTree.setProperty(jitterProperty(), modulation.settings.jitter, nullptr);
+        modulationsTree.appendChild(modulationTree, nullptr);
+    }
+
+    pointTree.appendChild(modulationsTree, nullptr);
     return pointTree;
 }
 
@@ -233,7 +348,7 @@ juce::ValueTree ProjectState::snapshotToValueTree(const domain::SnapshotModel& s
     snapshotTree.setProperty(nameProperty(), snapshot.name, nullptr);
 
     for (const auto& point : snapshot.points)
-        snapshotTree.appendChild(pointToValueTree(point), nullptr);
+        snapshotTree.appendChild(pointToValueTree(point, false), nullptr);
 
     return snapshotTree;
 }

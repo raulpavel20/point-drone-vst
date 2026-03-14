@@ -7,9 +7,10 @@
 
 namespace pointdrone::plugin
 {
-PointDroneAudioProcessorEditor::PointDroneAudioProcessorEditor(PointDroneAudioProcessor& audioProcessor)
-    : AudioProcessorEditor(&audioProcessor),
-      controller(audioProcessor.getProjectState()),
+PointDroneAudioProcessorEditor::PointDroneAudioProcessorEditor(PointDroneAudioProcessor& pluginProcessor)
+    : AudioProcessorEditor(&pluginProcessor),
+      audioProcessor(pluginProcessor),
+      controller(pluginProcessor.getProjectState()),
       snapToSemitoneButton("|||")
 {
     setLookAndFeel(&lookAndFeel);
@@ -71,15 +72,20 @@ PointDroneAudioProcessorEditor::PointDroneAudioProcessorEditor(PointDroneAudioPr
         controller.handleGainChanged(gain);
         refreshViews();
     };
+    inspectorPanel.onModulationRequested = [this](const pointdrone::domain::ModulationTarget target)
+    {
+        controller.handleModulationRequested(target);
+        refreshViews();
+    };
 
     masterOutputStrip.onGainChanged = [this](const float gain)
     {
         controller.handleOutputGainChanged(gain);
         refreshViews();
     };
-    masterOutputStrip.setMeterSupplier([&audioProcessor]
+    masterOutputStrip.setMeterSupplier([&pluginProcessor]
     {
-        return audioProcessor.getOutputMeterLevels();
+        return pluginProcessor.getOutputMeterLevels();
     });
 
     inspectorPanel.onFrequencyInputSubmitted = [this](juce::String text)
@@ -102,15 +108,33 @@ PointDroneAudioProcessorEditor::PointDroneAudioProcessorEditor(PointDroneAudioPr
         return accepted;
     };
 
+    modulationPopup.onSettingsChanged = [this](const pointdrone::domain::ModulationSettings& settings)
+    {
+        controller.handleModulationSettingsChanged(settings);
+        refreshViews();
+    };
+    modulationPopup.onDisableRequested = [this]
+    {
+        controller.handleModulationDisabled();
+        refreshViews();
+    };
+    modulationPopup.onCloseRequested = [this]
+    {
+        controller.handleModulationPopupClosed();
+        refreshViews();
+    };
+
     addAndMakeVisible(chartComponent);
     addAndMakeVisible(pointWavePreview);
     addAndMakeVisible(inspectorPanel);
     addAndMakeVisible(masterOutputStrip);
+    addChildComponent(modulationPopup);
     addAndMakeVisible(snapToSemitoneButton);
     snapToSemitoneButton.toFront(false);
 
     setSize(1160, 620);
     refreshViews();
+    startTimerHz(30);
 }
 
 PointDroneAudioProcessorEditor::~PointDroneAudioProcessorEditor()
@@ -146,6 +170,7 @@ void PointDroneAudioProcessorEditor::resized()
     inspectorPanel.setBounds(inspectorBounds);
     pointWavePreview.setBounds(previewBounds);
     chartComponent.setBounds(chartBounds);
+    modulationPopup.setBounds(getLocalBounds().withSizeKeepingCentre(540, 270).translated(0, 24));
 }
 
 void PointDroneAudioProcessorEditor::refreshViews()
@@ -155,5 +180,46 @@ void PointDroneAudioProcessorEditor::refreshViews()
     pointWavePreview.setViewModel(std::move(viewState.wavePreview));
     inspectorPanel.setViewModel(std::move(viewState.inspector));
     masterOutputStrip.setViewModel(std::move(viewState.masterOutput));
+    modulationPopup.setViewModel(std::move(viewState.modulationPopup));
+
+    if (cachedTelemetry.has_value() && cachedTelemetryPointId == controller.getSelectedPointId())
+        applyRuntimeTelemetry(*cachedTelemetry);
+
+    if (modulationPopup.isVisible())
+        modulationPopup.toFront(false);
+}
+
+void PointDroneAudioProcessorEditor::timerCallback()
+{
+    const auto selectedPointId = controller.getSelectedPointId();
+
+    if (const auto telemetry = audioProcessor.getPointRuntimeTelemetry(selectedPointId); telemetry.has_value())
+    {
+        cachedTelemetryPointId = selectedPointId;
+        cachedTelemetry = telemetry;
+        applyRuntimeTelemetry(*telemetry);
+        return;
+    }
+
+    cachedTelemetryPointId.clear();
+    cachedTelemetry.reset();
+}
+
+void PointDroneAudioProcessorEditor::applyRuntimeTelemetry(const pointdrone::audio::PointRuntimeTelemetry& telemetry)
+{
+    inspectorPanel.setLiveModulationValues({
+                                               telemetry.modulatedValues[pointdrone::domain::modulationIndex(pointdrone::domain::ModulationTarget::sinePhase)],
+                                               telemetry.modulatedValues[pointdrone::domain::modulationIndex(pointdrone::domain::ModulationTarget::sawShape)],
+                                               telemetry.modulatedValues[pointdrone::domain::modulationIndex(pointdrone::domain::ModulationTarget::squarePulseWidth)],
+                                               telemetry.modulatedValues[pointdrone::domain::modulationIndex(pointdrone::domain::ModulationTarget::noiseTone)]
+                                           },
+                                           {
+                                               telemetry.modulatedValues[pointdrone::domain::modulationIndex(pointdrone::domain::ModulationTarget::sine)],
+                                               telemetry.modulatedValues[pointdrone::domain::modulationIndex(pointdrone::domain::ModulationTarget::saw)],
+                                               telemetry.modulatedValues[pointdrone::domain::modulationIndex(pointdrone::domain::ModulationTarget::square)],
+                                               telemetry.modulatedValues[pointdrone::domain::modulationIndex(pointdrone::domain::ModulationTarget::noise)]
+                                           },
+                                           telemetry.modulatedValues[pointdrone::domain::modulationIndex(pointdrone::domain::ModulationTarget::gain)]);
+    pointWavePreview.setViewModel(controller.getLiveWavePreviewViewModel(telemetry));
 }
 }

@@ -21,7 +21,9 @@ void PointRenderer::render(const domain::ProjectModel& model, juce::AudioBuffer<
     outputBuffer.clear();
 
     std::unordered_set<std::string> activeVoiceIds;
+    std::unordered_map<std::string, PointRuntimeTelemetry> nextRuntimeTelemetry;
     activeVoiceIds.reserve(model.points.size());
+    nextRuntimeTelemetry.reserve(model.points.size());
 
     for (const auto& point : model.points)
     {
@@ -35,12 +37,18 @@ void PointRenderer::render(const domain::ProjectModel& model, juce::AudioBuffer<
             voice.prepare(currentSampleRate);
 
         voice.render(outputBuffer, outputBuffer.getNumSamples(), point);
+        nextRuntimeTelemetry[voiceId] = voice.getRuntimeTelemetry();
     }
 
     std::erase_if(voices, [&activeVoiceIds](const auto& item)
     {
         return ! activeVoiceIds.contains(item.first);
     });
+
+    {
+        const juce::SpinLock::ScopedLockType lock(runtimeTelemetryLock);
+        runtimeTelemetry = std::move(nextRuntimeTelemetry);
+    }
 
     const auto pointCount = static_cast<float>(juce::jmax(1, static_cast<int>(model.points.size())));
     outputBuffer.applyGain(1.0f / std::sqrt(pointCount));
@@ -56,5 +64,16 @@ void PointRenderer::render(const domain::ProjectModel& model, juce::AudioBuffer<
             channelData[sampleIndex] = std::tanh(channelData[sampleIndex] * gain);
         }
     }
+}
+
+std::optional<PointRuntimeTelemetry> PointRenderer::getRuntimeTelemetry(const juce::String& pointId) const
+{
+    const juce::SpinLock::ScopedLockType lock(runtimeTelemetryLock);
+    const auto iterator = runtimeTelemetry.find(pointId.toStdString());
+
+    if (iterator == runtimeTelemetry.end())
+        return std::nullopt;
+
+    return iterator->second;
 }
 }

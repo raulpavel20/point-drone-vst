@@ -1,6 +1,7 @@
 #include "AppLookAndFeel.h"
 
 #include "../core/Theme.h"
+#include "ModulatableSlider.h"
 
 #include <BinaryData.h>
 
@@ -68,6 +69,16 @@ void AppLookAndFeel::drawLinearSlider(juce::Graphics& graphics,
                                  .withCentre({ centerX, sliderPos });
 
     graphics.setColour(pointdrone::core::Theme::accent());
-    graphics.fillRect(thumbBounds);
+
+    if (const auto* modulatableSlider = dynamic_cast<const pointdrone::ui::ModulatableSlider*>(&slider);
+        modulatableSlider != nullptr && modulatableSlider->isDisplayingLiveValue())
+    {
+        const auto diameter = juce::jmin(thumbBounds.getWidth(), thumbBounds.getHeight() + 6.0f);
+        graphics.fillEllipse(juce::Rectangle<float>(diameter, diameter).withCentre(thumbBounds.getCentre()));
+    }
+    else
+    {
+        graphics.fillRect(thumbBounds);
+    }
 }
 }

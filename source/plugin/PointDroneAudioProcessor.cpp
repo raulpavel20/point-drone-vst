@@ -129,6 +129,14 @@ std::array<float, 2> PointDroneAudioProcessor::getOutputMeterLevels() const
 {
     return { leftMeterLevel.load(), rightMeterLevel.load() };
 }
+
+std::optional<pointdrone::audio::PointRuntimeTelemetry> PointDroneAudioProcessor::getPointRuntimeTelemetry(const juce::String& pointId) const
+{
+    if (pointId.isEmpty())
+        return std::nullopt;
+
+    return renderer.getRuntimeTelemetry(pointId);
+}
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

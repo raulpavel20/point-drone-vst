@@ -41,6 +41,8 @@ target_sources(PointDrone
         source/controller/EditorController.h
         source/controller/EditorViewModels.h
         source/core/ChartMapping.h
+        source/core/RandomModulator.cpp
+        source/core/RandomModulator.h
         source/core/Theme.h
         source/domain/PointModel.h
         source/domain/ProjectModel.h
@@ -59,6 +61,9 @@ target_sources(PointDrone
         source/ui/InspectorPanel.h
         source/ui/MasterOutputStrip.cpp
         source/ui/MasterOutputStrip.h
+        source/ui/ModulatableSlider.h
+        source/ui/ModulationPopup.cpp
+        source/ui/ModulationPopup.h
         source/ui/PointWavePreview.cpp
         source/ui/PointWavePreview.h
         source/ui/WaveMixSliders.cpp

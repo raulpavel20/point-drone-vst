@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../domain/PointModel.h"
+#include "ModulatableSlider.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -18,25 +19,38 @@ public:
     void resized() override;
 
     void setValues(const SliderValues& values);
+    void setLiveValues(const SliderValues& values);
+    void clearLiveValues();
     SliderValues getValues() const;
     void setEnabledState(bool shouldBeEnabled);
+    void setModulatedStates(const std::array<bool, 4>& newModulatedStates);
 
     std::function<void(SliderValues)> onValuesChanged;
+    std::function<void(int)> onSliderDoubleClicked;
 
 private:
-    void configureSlider(juce::Slider& slider);
+    void configureSlider(ModulatableSlider& slider, int index);
     void handleSliderChange();
+    void applyDisplayedValues();
+    ModulatableSlider& sliderAt(int index);
+    const ModulatableSlider& sliderAt(int index) const;
+    void updateLabelColours();
 
     juce::Label sineLabel;
     juce::Label sawLabel;
     juce::Label squareLabel;
     juce::Label noiseLabel;
 
-    juce::Slider sineSlider;
-    juce::Slider sawSlider;
-    juce::Slider squareSlider;
-    juce::Slider noiseSlider;
+    ModulatableSlider sineSlider;
+    ModulatableSlider sawSlider;
+    ModulatableSlider squareSlider;
+    ModulatableSlider noiseSlider;
 
+    bool enabledState = true;
+    std::array<bool, 4> modulatedStates { false, false, false, false };
+    SliderValues baseValues { 0.0f, 0.0f, 0.0f, 0.0f };
+    SliderValues liveValues { 0.0f, 0.0f, 0.0f, 0.0f };
+    bool hasLiveValues = false;
     bool updatingFromState = false;
 };
 }

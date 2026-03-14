@@ -1,6 +1,7 @@
 #include "EditorController.h"
 
 #include "../core/ChartMapping.h"
+#include "../core/RandomModulator.h"
 
 #include <cmath>
 #include <optional>
@@ -13,6 +14,7 @@ namespace
 constexpr int previewSampleCount = 192;
 constexpr float previewCycles = 2.0f;
 constexpr double previewSampleRate = 44100.0;
+constexpr int modulationPreviewSampleCount = 256;
 
 juce::String noteIndicatorText(const float frequencyHz)
 {
@@ -66,6 +68,26 @@ juce::String panText(const std::optional<pointdrone::domain::PointModel>& point)
 
     const auto side = point->pan < 0.0f ? "LEFT" : "RIGHT";
     return "[PAN " + juce::String(std::abs(point->pan) * 100.0f, 0) + "% " + side + "]";
+}
+
+juce::String modulationTargetTitle(const pointdrone::domain::ModulationTarget target)
+{
+    using Target = pointdrone::domain::ModulationTarget;
+
+    switch (target)
+    {
+        case Target::sinePhase: return "[SINE PHASE MOD]";
+        case Target::sawShape: return "[SAW SHAPE MOD]";
+        case Target::squarePulseWidth: return "[SQUARE WIDTH MOD]";
+        case Target::noiseTone: return "[NOISE TONE MOD]";
+        case Target::sine: return "[SINE LEVEL MOD]";
+        case Target::saw: return "[SAW LEVEL MOD]";
+        case Target::square: return "[SQUARE LEVEL MOD]";
+        case Target::noise: return "[NOISE LEVEL MOD]";
+        case Target::gain: return "[GAIN MOD]";
+    }
+
+    return "[MOD]";
 }
 
 std::optional<pointdrone::domain::PointModel> selectedPointFromModel(const pointdrone::domain::ProjectModel& model, const juce::String& currentSelectedPointId)
@@ -210,6 +232,34 @@ EditorController::EditorController(pointdrone::state::ProjectState& projectState
 {
 }
 
+juce::String EditorController::getSelectedPointId() const
+{
+    return selectedPointId;
+}
+
+PointWavePreviewViewModel EditorController::getLiveWavePreviewViewModel(const pointdrone::audio::PointRuntimeTelemetry& telemetry)
+{
+    syncSelectionWithState();
+
+    const auto model = state.getModel();
+    const auto selectedPoint = selectedPointFromModel(model, selectedPointId);
+
+    if (! selectedPoint.has_value())
+        return {};
+
+    auto point = *selectedPoint;
+    point.waveTimbre.sinePhase = telemetry.modulatedValues[pointdrone::domain::modulationIndex(pointdrone::domain::ModulationTarget::sinePhase)];
+    point.waveTimbre.sawShape = telemetry.modulatedValues[pointdrone::domain::modulationIndex(pointdrone::domain::ModulationTarget::sawShape)];
+    point.waveTimbre.squarePulseWidth = telemetry.modulatedValues[pointdrone::domain::modulationIndex(pointdrone::domain::ModulationTarget::squarePulseWidth)];
+    point.waveTimbre.noiseTone = telemetry.modulatedValues[pointdrone::domain::modulationIndex(pointdrone::domain::ModulationTarget::noiseTone)];
+    point.waveMix.sine = telemetry.modulatedValues[pointdrone::domain::modulationIndex(pointdrone::domain::ModulationTarget::sine)];
+    point.waveMix.saw = telemetry.modulatedValues[pointdrone::domain::modulationIndex(pointdrone::domain::ModulationTarget::saw)];
+    point.waveMix.square = telemetry.modulatedValues[pointdrone::domain::modulationIndex(pointdrone::domain::ModulationTarget::square)];
+    point.waveMix.noise = telemetry.modulatedValues[pointdrone::domain::modulationIndex(pointdrone::domain::ModulationTarget::noise)];
+    point.gain = telemetry.modulatedValues[pointdrone::domain::modulationIndex(pointdrone::domain::ModulationTarget::gain)];
+    return createWavePreviewViewModel(point);
+}
+
 EditorViewState EditorController::getViewState()
 {
     syncSelectionWithState();
@@ -220,7 +270,8 @@ EditorViewState EditorController::getViewState()
         createChartViewModel(model, selectedPointId),
         createWavePreviewViewModel(model, selectedPointId),
         createInspectorViewModel(model, selectedPointId),
-        createMasterOutputViewModel(model)
+        createMasterOutputViewModel(model),
+        createModulationPopupViewModel(model, selectedPointId, editingModulationTarget)
     };
 }
 
@@ -287,6 +338,51 @@ void EditorController::handleOutputGainChanged(const float gain)
     state.updateOutputGain(gain);
 }
 
+void EditorController::handleModulationRequested(const pointdrone::domain::ModulationTarget target)
+{
+    syncSelectionWithState();
+
+    if (selectedPointId.isEmpty())
+        return;
+
+    const auto model = state.getModel();
+    const auto selectedPoint = selectedPointFromModel(model, selectedPointId);
+
+    if (! selectedPoint.has_value())
+        return;
+
+    if (! pointdrone::domain::modulationFor(*selectedPoint, target).enabled)
+        state.updatePointModulationEnabled(selectedPointId, target, true);
+
+    editingModulationTarget = target;
+}
+
+void EditorController::handleModulationDisabled()
+{
+    syncSelectionWithState();
+
+    if (selectedPointId.isEmpty() || ! editingModulationTarget.has_value())
+        return;
+
+    state.updatePointModulationEnabled(selectedPointId, *editingModulationTarget, false);
+    editingModulationTarget.reset();
+}
+
+void EditorController::handleModulationPopupClosed()
+{
+    editingModulationTarget.reset();
+}
+
+void EditorController::handleModulationSettingsChanged(const pointdrone::domain::ModulationSettings& settings)
+{
+    syncSelectionWithState();
+
+    if (selectedPointId.isEmpty() || ! editingModulationTarget.has_value())
+        return;
+
+    state.updatePointModulationSettings(selectedPointId, *editingModulationTarget, settings);
+}
+
 void EditorController::handleSnapAllPointsToSemitone()
 {
     const auto model = state.getModel();
@@ -332,7 +428,10 @@ bool EditorController::handlePanInputSubmitted(const juce::String& text)
 void EditorController::syncSelectionWithState()
 {
     if (selectedPointId.isNotEmpty() && ! state.containsPoint(selectedPointId))
+    {
         selectedPointId.clear();
+        editingModulationTarget.reset();
+    }
 }
 
 ChartViewModel EditorController::createChartViewModel(const pointdrone::domain::ProjectModel& model, const juce::String& currentSelectedPointId)
@@ -356,15 +455,20 @@ ChartViewModel EditorController::createChartViewModel(const pointdrone::domain::
 PointWavePreviewViewModel EditorController::createWavePreviewViewModel(const pointdrone::domain::ProjectModel& model, const juce::String& currentSelectedPointId)
 {
     const auto selectedPoint = selectedPointFromModel(model, currentSelectedPointId);
-    PointWavePreviewViewModel viewModel;
 
     if (! selectedPoint.has_value())
-        return viewModel;
+        return {};
 
+    return createWavePreviewViewModel(*selectedPoint);
+}
+
+PointWavePreviewViewModel EditorController::createWavePreviewViewModel(const pointdrone::domain::PointModel& point)
+{
+    PointWavePreviewViewModel viewModel;
     viewModel.hasSelection = true;
     viewModel.samples.reserve(previewSampleCount);
 
-    juce::Random random(selectedPoint->id.hashCode64());
+    juce::Random random(point.id.hashCode64());
     float filteredNoise = 0.0f;
 
     for (int sampleIndex = 0; sampleIndex < previewSampleCount; ++sampleIndex)
@@ -376,22 +480,20 @@ PointWavePreviewViewModel EditorController::createWavePreviewViewModel(const poi
                                       previewCycles * juce::MathConstants<float>::twoPi);
         const auto wrappedPhase = std::fmod(phase, juce::MathConstants<float>::twoPi);
 
-        float mixedSample = 0.0f;
-
         const auto rawSawSample = (wrappedPhase / juce::MathConstants<float>::pi) - 1.0f;
-        const auto sineSample = std::sin(wrappedPhase + selectedPoint->waveTimbre.sinePhase * juce::MathConstants<float>::twoPi);
-        const auto sawSample = rawSawSample + selectedPoint->waveTimbre.sawShape * (triangleSample(rawSawSample) - rawSawSample);
-        const auto squareSample = wrappedPhase < pulseWidth(selectedPoint->waveTimbre.squarePulseWidth) * juce::MathConstants<float>::twoPi ? 1.0f : -1.0f;
+        const auto sineSample = std::sin(wrappedPhase + point.waveTimbre.sinePhase * juce::MathConstants<float>::twoPi);
+        const auto sawSample = rawSawSample + point.waveTimbre.sawShape * (triangleSample(rawSawSample) - rawSawSample);
+        const auto squareSample = wrappedPhase < pulseWidth(point.waveTimbre.squarePulseWidth) * juce::MathConstants<float>::twoPi ? 1.0f : -1.0f;
         const auto noiseSample = lowPassNoise(random.nextFloat() * 2.0f - 1.0f,
-                                              noiseCutoffHz(selectedPoint->waveTimbre.noiseTone),
+                                              noiseCutoffHz(point.waveTimbre.noiseTone),
                                               filteredNoise);
 
-        mixedSample = (selectedPoint->waveMix.sine * sineSample)
-                    + (selectedPoint->waveMix.saw * sawSample)
-                    + (selectedPoint->waveMix.square * squareSample)
-                    + (selectedPoint->waveMix.noise * noiseSample);
+        const auto mixedSample = (point.waveMix.sine * sineSample)
+                               + (point.waveMix.saw * sawSample)
+                               + (point.waveMix.square * squareSample)
+                               + (point.waveMix.noise * noiseSample);
 
-        viewModel.samples.push_back(juce::jlimit(-1.0f, 1.0f, mixedSample * selectedPoint->gain));
+        viewModel.samples.push_back(juce::jlimit(-1.0f, 1.0f, mixedSample * point.gain));
     }
 
     return viewModel;
@@ -402,12 +504,31 @@ InspectorViewModel EditorController::createInspectorViewModel(const pointdrone::
     const auto selectedPoint = selectedPointFromModel(model, currentSelectedPointId);
 
     InspectorViewModel viewModel;
+    viewModel.pointId = selectedPoint.has_value() ? selectedPoint->id : juce::String {};
     viewModel.hasSelection = selectedPoint.has_value();
     viewModel.frequencyHz = selectedPoint.has_value() ? selectedPoint->frequencyHz : 0.0f;
     viewModel.pan = selectedPoint.has_value() ? selectedPoint->pan : 0.0f;
     viewModel.waveTimbre = selectedPoint.has_value() ? selectedPoint->waveTimbre : pointdrone::domain::WaveTimbre {};
     viewModel.waveMix = selectedPoint.has_value() ? selectedPoint->waveMix : pointdrone::domain::WaveMix {};
     viewModel.gain = selectedPoint.has_value() ? selectedPoint->gain : 1.0f;
+
+    if (selectedPoint.has_value())
+    {
+        viewModel.modulation.waveTimbre = {
+            pointdrone::domain::modulationFor(*selectedPoint, pointdrone::domain::ModulationTarget::sinePhase).enabled,
+            pointdrone::domain::modulationFor(*selectedPoint, pointdrone::domain::ModulationTarget::sawShape).enabled,
+            pointdrone::domain::modulationFor(*selectedPoint, pointdrone::domain::ModulationTarget::squarePulseWidth).enabled,
+            pointdrone::domain::modulationFor(*selectedPoint, pointdrone::domain::ModulationTarget::noiseTone).enabled
+        };
+        viewModel.modulation.waveMix = {
+            pointdrone::domain::modulationFor(*selectedPoint, pointdrone::domain::ModulationTarget::sine).enabled,
+            pointdrone::domain::modulationFor(*selectedPoint, pointdrone::domain::ModulationTarget::saw).enabled,
+            pointdrone::domain::modulationFor(*selectedPoint, pointdrone::domain::ModulationTarget::square).enabled,
+            pointdrone::domain::modulationFor(*selectedPoint, pointdrone::domain::ModulationTarget::noise).enabled
+        };
+        viewModel.modulation.gain = pointdrone::domain::modulationFor(*selectedPoint, pointdrone::domain::ModulationTarget::gain).enabled;
+    }
+
     viewModel.frequencyText = frequencyText(selectedPoint);
     viewModel.panText = panText(selectedPoint);
     return viewModel;
@@ -417,6 +538,36 @@ MasterOutputViewModel EditorController::createMasterOutputViewModel(const pointd
 {
     MasterOutputViewModel viewModel;
     viewModel.gain = model.outputGain;
+    return viewModel;
+}
+
+ModulationPopupViewModel EditorController::createModulationPopupViewModel(const pointdrone::domain::ProjectModel& model,
+                                                                          const juce::String& currentSelectedPointId,
+                                                                          const std::optional<pointdrone::domain::ModulationTarget>& currentEditingModulationTarget)
+{
+    ModulationPopupViewModel viewModel;
+
+    if (! currentEditingModulationTarget.has_value())
+        return viewModel;
+
+    const auto selectedPoint = selectedPointFromModel(model, currentSelectedPointId);
+
+    if (! selectedPoint.has_value())
+        return viewModel;
+
+    const auto& modulation = pointdrone::domain::modulationFor(*selectedPoint, *currentEditingModulationTarget);
+    viewModel.visible = true;
+    viewModel.title = modulationTargetTitle(*currentEditingModulationTarget);
+    viewModel.settings = modulation.settings;
+    viewModel.samples = pointdrone::core::RandomModulator::createPreview(modulation.settings,
+                                                                         pointdrone::core::RandomModulator::seedForTarget(selectedPoint->id,
+                                                                                                                         *currentEditingModulationTarget),
+                                                                         previewSampleRate,
+                                                                         modulationPreviewSampleCount);
+
+    for (auto& sample : viewModel.samples)
+        sample = pointdrone::core::RandomModulator::mapToNormalizedRange(sample);
+
     return viewModel;
 }
 }

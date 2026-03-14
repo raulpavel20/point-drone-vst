@@ -1,6 +1,8 @@
 #pragma once
 
 #include "../controller/EditorViewModels.h"
+#include "../domain/PointModel.h"
+#include "ModulatableSlider.h"
 #include "WaveMixSliders.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -17,10 +19,14 @@ public:
     void mouseDoubleClick(const juce::MouseEvent& event) override;
 
     void setViewModel(pointdrone::controller::InspectorViewModel newViewModel);
+    void setLiveModulationValues(const std::array<float, 4>& waveTimbreValues,
+                                 const std::array<float, 4>& waveMixValues,
+                                 float gainValue);
 
     std::function<void(pointdrone::domain::WaveTimbre)> onWaveTimbreChanged;
     std::function<void(pointdrone::domain::WaveMix)> onWaveMixChanged;
     std::function<void(float)> onGainChanged;
+    std::function<void(pointdrone::domain::ModulationTarget)> onModulationRequested;
     std::function<bool(juce::String)> onFrequencyInputSubmitted;
     std::function<bool(juce::String)> onPanInputSubmitted;
 
@@ -46,9 +52,13 @@ private:
     WaveMixSliders waveTimbreSliders;
     WaveMixSliders waveMixSliders;
     juce::Label gainLabel;
-    juce::Slider gainSlider;
+    ModulatableSlider gainSlider;
     juce::TextEditor inputEditor;
     EditableField editingField = EditableField::none;
+    juce::String currentPointId;
+    float baseGainValue = 1.0f;
+    float liveGainValue = 1.0f;
+    bool hasLiveGainValue = false;
     bool updatingFromState = false;
 };
 }

@@ -17,10 +17,10 @@ WaveMixSliders::WaveMixSliders(std::array<juce::String, 4> labels)
         addAndMakeVisible(*label);
     }
 
-    configureSlider(sineSlider);
-    configureSlider(sawSlider);
-    configureSlider(squareSlider);
-    configureSlider(noiseSlider);
+    configureSlider(sineSlider, 0);
+    configureSlider(sawSlider, 1);
+    configureSlider(squareSlider, 2);
+    configureSlider(noiseSlider, 3);
 }
 
 void WaveMixSliders::resized()
@@ -44,40 +44,64 @@ void WaveMixSliders::resized()
 
 void WaveMixSliders::setValues(const SliderValues& values)
 {
-    const juce::ScopedValueSetter<bool> setter(updatingFromState, true);
-    sineSlider.setValue(values[0], juce::dontSendNotification);
-    sawSlider.setValue(values[1], juce::dontSendNotification);
-    squareSlider.setValue(values[2], juce::dontSendNotification);
-    noiseSlider.setValue(values[3], juce::dontSendNotification);
+    baseValues = values;
+    applyDisplayedValues();
+}
+
+void WaveMixSliders::setLiveValues(const SliderValues& values)
+{
+    liveValues = values;
+    hasLiveValues = true;
+    applyDisplayedValues();
+}
+
+void WaveMixSliders::clearLiveValues()
+{
+    hasLiveValues = false;
+    applyDisplayedValues();
 }
 
 WaveMixSliders::SliderValues WaveMixSliders::getValues() const
 {
-    return { static_cast<float>(sineSlider.getValue()),
-             static_cast<float>(sawSlider.getValue()),
-             static_cast<float>(squareSlider.getValue()),
-             static_cast<float>(noiseSlider.getValue()) };
+    return baseValues;
 }
 
 void WaveMixSliders::setEnabledState(const bool shouldBeEnabled)
 {
+    enabledState = shouldBeEnabled;
     sineSlider.setEnabled(shouldBeEnabled);
     sawSlider.setEnabled(shouldBeEnabled);
     squareSlider.setEnabled(shouldBeEnabled);
     noiseSlider.setEnabled(shouldBeEnabled);
-
-    sineLabel.setColour(juce::Label::textColourId, shouldBeEnabled ? pointdrone::core::Theme::text() : pointdrone::core::Theme::muted());
-    sawLabel.setColour(juce::Label::textColourId, shouldBeEnabled ? pointdrone::core::Theme::text() : pointdrone::core::Theme::muted());
-    squareLabel.setColour(juce::Label::textColourId, shouldBeEnabled ? pointdrone::core::Theme::text() : pointdrone::core::Theme::muted());
-    noiseLabel.setColour(juce::Label::textColourId, shouldBeEnabled ? pointdrone::core::Theme::text() : pointdrone::core::Theme::muted());
+    updateLabelColours();
 }
 
-void WaveMixSliders::configureSlider(juce::Slider& slider)
+void WaveMixSliders::setModulatedStates(const std::array<bool, 4>& newModulatedStates)
+{
+    modulatedStates = newModulatedStates;
+    sineSlider.setModulationEnabled(modulatedStates[0]);
+    sawSlider.setModulationEnabled(modulatedStates[1]);
+    squareSlider.setModulationEnabled(modulatedStates[2]);
+    noiseSlider.setModulationEnabled(modulatedStates[3]);
+    sineSlider.setDisplayingLiveValue(modulatedStates[0]);
+    sawSlider.setDisplayingLiveValue(modulatedStates[1]);
+    squareSlider.setDisplayingLiveValue(modulatedStates[2]);
+    noiseSlider.setDisplayingLiveValue(modulatedStates[3]);
+    applyDisplayedValues();
+    updateLabelColours();
+}
+
+void WaveMixSliders::configureSlider(ModulatableSlider& slider, const int index)
 {
     slider.setSliderStyle(juce::Slider::LinearVertical);
     slider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     slider.setRange(0.0, 1.0, 0.001);
     slider.onValueChange = [this] { handleSliderChange(); };
+    slider.onModulationDoubleClick = [this, index]
+    {
+        if (onSliderDoubleClicked != nullptr)
+            onSliderDoubleClicked(index);
+    };
     addAndMakeVisible(slider);
 }
 
@@ -86,7 +110,62 @@ void WaveMixSliders::handleSliderChange()
     if (updatingFromState)
         return;
 
+    for (int index = 0; index < 4; ++index)
+    {
+        if (! modulatedStates[static_cast<std::size_t>(index)])
+            baseValues[static_cast<std::size_t>(index)] = static_cast<float>(sliderAt(index).getValue());
+    }
+
     if (onValuesChanged != nullptr)
         onValuesChanged(getValues());
+}
+
+void WaveMixSliders::applyDisplayedValues()
+{
+    const juce::ScopedValueSetter<bool> setter(updatingFromState, true);
+    sineSlider.setValue(modulatedStates[0] && hasLiveValues ? liveValues[0] : baseValues[0], juce::dontSendNotification);
+    sawSlider.setValue(modulatedStates[1] && hasLiveValues ? liveValues[1] : baseValues[1], juce::dontSendNotification);
+    squareSlider.setValue(modulatedStates[2] && hasLiveValues ? liveValues[2] : baseValues[2], juce::dontSendNotification);
+    noiseSlider.setValue(modulatedStates[3] && hasLiveValues ? liveValues[3] : baseValues[3], juce::dontSendNotification);
+}
+
+ModulatableSlider& WaveMixSliders::sliderAt(const int index)
+{
+    switch (index)
+    {
+        case 0: return sineSlider;
+        case 1: return sawSlider;
+        case 2: return squareSlider;
+        default: return noiseSlider;
+    }
+}
+
+const ModulatableSlider& WaveMixSliders::sliderAt(const int index) const
+{
+    switch (index)
+    {
+        case 0: return sineSlider;
+        case 1: return sawSlider;
+        case 2: return squareSlider;
+        default: return noiseSlider;
+    }
+}
+
+void WaveMixSliders::updateLabelColours()
+{
+    auto colourForIndex = [this](const int index)
+    {
+        if (! enabledState)
+            return pointdrone::core::Theme::muted();
+
+        return modulatedStates[static_cast<std::size_t>(index)]
+            ? pointdrone::core::Theme::accent()
+            : pointdrone::core::Theme::text();
+    };
+
+    sineLabel.setColour(juce::Label::textColourId, colourForIndex(0));
+    sawLabel.setColour(juce::Label::textColourId, colourForIndex(1));
+    squareLabel.setColour(juce::Label::textColourId, colourForIndex(2));
+    noiseLabel.setColour(juce::Label::textColourId, colourForIndex(3));
 }
 }

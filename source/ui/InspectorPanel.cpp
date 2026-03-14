@@ -36,6 +36,34 @@ InspectorPanel::InspectorPanel()
             });
         }
     };
+    waveTimbreSliders.onSliderDoubleClicked = [this](const int index)
+    {
+        if (onModulationRequested == nullptr)
+            return;
+
+        switch (index)
+        {
+            case 0: onModulationRequested(pointdrone::domain::ModulationTarget::sinePhase); break;
+            case 1: onModulationRequested(pointdrone::domain::ModulationTarget::sawShape); break;
+            case 2: onModulationRequested(pointdrone::domain::ModulationTarget::squarePulseWidth); break;
+            case 3: onModulationRequested(pointdrone::domain::ModulationTarget::noiseTone); break;
+            default: break;
+        }
+    };
+    waveMixSliders.onSliderDoubleClicked = [this](const int index)
+    {
+        if (onModulationRequested == nullptr)
+            return;
+
+        switch (index)
+        {
+            case 0: onModulationRequested(pointdrone::domain::ModulationTarget::sine); break;
+            case 1: onModulationRequested(pointdrone::domain::ModulationTarget::saw); break;
+            case 2: onModulationRequested(pointdrone::domain::ModulationTarget::square); break;
+            case 3: onModulationRequested(pointdrone::domain::ModulationTarget::noise); break;
+            default: break;
+        }
+    };
 
     gainLabel.setText("[GAIN]", juce::dontSendNotification);
     gainLabel.setJustificationType(juce::Justification::centred);
@@ -50,6 +78,11 @@ InspectorPanel::InspectorPanel()
 
         if (onGainChanged != nullptr)
             onGainChanged(static_cast<float>(gainSlider.getValue()));
+    };
+    gainSlider.onModulationDoubleClick = [this]
+    {
+        if (onModulationRequested != nullptr)
+            onModulationRequested(pointdrone::domain::ModulationTarget::gain);
     };
 
     inputEditor.setVisible(false);
@@ -134,13 +167,27 @@ void InspectorPanel::mouseDoubleClick(const juce::MouseEvent& event)
 
 void InspectorPanel::setViewModel(pointdrone::controller::InspectorViewModel newViewModel)
 {
+    const auto pointChanged = currentPointId != newViewModel.pointId;
+    currentPointId = newViewModel.pointId;
     viewModel = std::move(newViewModel);
 
     if (! viewModel.hasSelection)
+    {
         hideEditor();
+        waveTimbreSliders.clearLiveValues();
+        waveMixSliders.clearLiveValues();
+        hasLiveGainValue = false;
+    }
+    else if (pointChanged)
+    {
+        waveTimbreSliders.clearLiveValues();
+        waveMixSliders.clearLiveValues();
+        hasLiveGainValue = false;
+    }
 
     const juce::ScopedValueSetter<bool> setter(updatingFromState, true);
     waveTimbreSliders.setEnabledState(viewModel.hasSelection);
+    waveTimbreSliders.setModulatedStates(viewModel.modulation.waveTimbre);
     waveTimbreSliders.setValues({
         viewModel.waveTimbre.sinePhase,
         viewModel.waveTimbre.sawShape,
@@ -148,6 +195,7 @@ void InspectorPanel::setViewModel(pointdrone::controller::InspectorViewModel new
         viewModel.waveTimbre.noiseTone
     });
     waveMixSliders.setEnabledState(viewModel.hasSelection);
+    waveMixSliders.setModulatedStates(viewModel.modulation.waveMix);
     waveMixSliders.setValues({
         viewModel.waveMix.sine,
         viewModel.waveMix.saw,
@@ -155,9 +203,36 @@ void InspectorPanel::setViewModel(pointdrone::controller::InspectorViewModel new
         viewModel.waveMix.noise
     });
     gainSlider.setEnabled(viewModel.hasSelection);
-    gainSlider.setValue(viewModel.gain, juce::dontSendNotification);
-    gainLabel.setColour(juce::Label::textColourId, viewModel.hasSelection ? pointdrone::core::Theme::text() : pointdrone::core::Theme::muted());
+    gainSlider.setModulationEnabled(viewModel.modulation.gain);
+    gainSlider.setDisplayingLiveValue(viewModel.modulation.gain);
+    baseGainValue = viewModel.gain;
+    gainSlider.setValue(viewModel.modulation.gain && hasLiveGainValue ? liveGainValue : baseGainValue, juce::dontSendNotification);
+    gainLabel.setColour(juce::Label::textColourId,
+                        ! viewModel.hasSelection
+                            ? pointdrone::core::Theme::muted()
+                            : (viewModel.modulation.gain ? pointdrone::core::Theme::accent() : pointdrone::core::Theme::text()));
     repaint();
+}
+
+void InspectorPanel::setLiveModulationValues(const std::array<float, 4>& waveTimbreValues,
+                                             const std::array<float, 4>& waveMixValues,
+                                             const float gainValue)
+{
+    waveTimbreSliders.setLiveValues(waveTimbreValues);
+    waveMixSliders.setLiveValues(waveMixValues);
+    liveGainValue = gainValue;
+    hasLiveGainValue = true;
+
+    if (viewModel.modulation.gain)
+    {
+        const juce::ScopedValueSetter<bool> setter(updatingFromState, true);
+        gainSlider.setValue(liveGainValue, juce::dontSendNotification);
+    }
+    else
+    {
+        const juce::ScopedValueSetter<bool> setter(updatingFromState, true);
+        gainSlider.setValue(baseGainValue, juce::dontSendNotification);
+    }
 }
 
 juce::Rectangle<int> InspectorPanel::frequencyTextBounds() const

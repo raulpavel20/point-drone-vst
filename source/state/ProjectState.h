@@ -18,6 +18,10 @@ public:
     bool updatePointPosition(const juce::String& pointId, float frequencyHz, float pan);
     bool updateOutputGain(float outputGain);
     bool updatePointGain(const juce::String& pointId, float gain);
+    bool updatePointModulationEnabled(const juce::String& pointId, domain::ModulationTarget target, bool enabled);
+    bool updatePointModulationSettings(const juce::String& pointId,
+                                       domain::ModulationTarget target,
+                                       const domain::ModulationSettings& settings);
     bool updatePointWaveTimbre(const juce::String& pointId, const domain::WaveTimbre& waveTimbre);
     bool updatePointWaveMix(const juce::String& pointId, const domain::WaveMix& waveMix);
     bool containsPoint(const juce::String& pointId) const;
@@ -29,9 +33,19 @@ private:
     static juce::Identifier projectType();
     static juce::Identifier pointsType();
     static juce::Identifier pointType();
+    static juce::Identifier modulationsType();
+    static juce::Identifier modulationType();
     static juce::Identifier snapshotsType();
     static juce::Identifier snapshotType();
     static juce::Identifier idProperty();
+    static juce::Identifier targetProperty();
+    static juce::Identifier enabledProperty();
+    static juce::Identifier amplitudeProperty();
+    static juce::Identifier modulationFrequencyProperty();
+    static juce::Identifier easeProperty();
+    static juce::Identifier slantProperty();
+    static juce::Identifier cyclicProperty();
+    static juce::Identifier jitterProperty();
     static juce::Identifier frequencyProperty();
     static juce::Identifier panProperty();
     static juce::Identifier outputGainProperty();
@@ -47,7 +61,7 @@ private:
     static juce::Identifier nameProperty();
 
     static domain::PointModel pointFromValueTree(const juce::ValueTree& pointTree);
-    static juce::ValueTree pointToValueTree(const domain::PointModel& point);
+    static juce::ValueTree pointToValueTree(const domain::PointModel& point, bool includeModulationEnabled = true);
     static domain::SnapshotModel snapshotFromValueTree(const juce::ValueTree& snapshotTree);
     static juce::ValueTree snapshotToValueTree(const domain::SnapshotModel& snapshot);
     static juce::ValueTree createDefaultState();

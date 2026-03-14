@@ -6,6 +6,16 @@ namespace pointdrone::audio
 {
 namespace
 {
+float modulatedValue(const float baseValue,
+                     pointdrone::core::RandomModulator& modulator,
+                     const pointdrone::domain::ParameterModulation& modulation)
+{
+    if (! modulation.enabled)
+        return juce::jlimit(0.0f, 1.0f, baseValue);
+
+    return pointdrone::core::RandomModulator::mapToNormalizedRange(modulator.getNextValue(modulation.settings));
+}
+
 float triangleSample(const float sawSample)
 {
     return 1.0f - 2.0f * std::abs(sawSample);
@@ -49,12 +59,16 @@ void PointVoice::prepare(const double newSampleRate)
     noise.reset(sampleRate, 0.03);
     filteredNoise = 0.0f;
     prepared = false;
+    pointId.clear();
+    runtimeTelemetry = {};
+    waveformWriteIndex = 0;
 }
 
 void PointVoice::render(juce::AudioBuffer<float>& outputBuffer, const int numSamples, const domain::PointModel& point)
 {
-    if (! prepared)
+    if (! prepared || pointId != point.id)
     {
+        pointId = point.id;
         frequencyHz.setCurrentAndTargetValue(point.frequencyHz);
         pan.setCurrentAndTargetValue(point.pan);
         gain.setCurrentAndTargetValue(point.gain);
@@ -66,6 +80,8 @@ void PointVoice::render(juce::AudioBuffer<float>& outputBuffer, const int numSam
         saw.setCurrentAndTargetValue(point.waveMix.saw);
         square.setCurrentAndTargetValue(point.waveMix.square);
         noise.setCurrentAndTargetValue(point.waveMix.noise);
+        for (const auto target : domain::allModulationTargets)
+            modulators[domain::modulationIndex(target)].prepare(sampleRate, pointdrone::core::RandomModulator::seedForTarget(point.id, target));
         prepared = true;
     }
 
@@ -99,25 +115,64 @@ void PointVoice::render(juce::AudioBuffer<float>& outputBuffer, const int numSam
         const auto currentSawShape = sawShape.getNextValue();
         const auto currentSquarePulseWidth = squarePulseWidth.getNextValue();
         const auto currentNoiseTone = noiseTone.getNextValue();
+        const auto modulatedSinePhase = modulatedValue(currentSinePhase,
+                                                      modulators[domain::modulationIndex(domain::ModulationTarget::sinePhase)],
+                                                      domain::modulationFor(point, domain::ModulationTarget::sinePhase));
+        const auto modulatedSawShape = modulatedValue(currentSawShape,
+                                                     modulators[domain::modulationIndex(domain::ModulationTarget::sawShape)],
+                                                     domain::modulationFor(point, domain::ModulationTarget::sawShape));
+        const auto modulatedSquarePulseWidth = modulatedValue(currentSquarePulseWidth,
+                                                              modulators[domain::modulationIndex(domain::ModulationTarget::squarePulseWidth)],
+                                                              domain::modulationFor(point, domain::ModulationTarget::squarePulseWidth));
+        const auto modulatedNoiseTone = modulatedValue(currentNoiseTone,
+                                                       modulators[domain::modulationIndex(domain::ModulationTarget::noiseTone)],
+                                                       domain::modulationFor(point, domain::ModulationTarget::noiseTone));
+        const auto modulatedSineLevel = modulatedValue(sineLevel,
+                                                       modulators[domain::modulationIndex(domain::ModulationTarget::sine)],
+                                                       domain::modulationFor(point, domain::ModulationTarget::sine));
+        const auto modulatedSawLevel = modulatedValue(sawLevel,
+                                                      modulators[domain::modulationIndex(domain::ModulationTarget::saw)],
+                                                      domain::modulationFor(point, domain::ModulationTarget::saw));
+        const auto modulatedSquareLevel = modulatedValue(squareLevel,
+                                                         modulators[domain::modulationIndex(domain::ModulationTarget::square)],
+                                                         domain::modulationFor(point, domain::ModulationTarget::square));
+        const auto modulatedNoiseLevel = modulatedValue(noiseLevel,
+                                                        modulators[domain::modulationIndex(domain::ModulationTarget::noise)],
+                                                        domain::modulationFor(point, domain::ModulationTarget::noise));
+        const auto modulatedGain = modulatedValue(gain.getNextValue(),
+                                                  modulators[domain::modulationIndex(domain::ModulationTarget::gain)],
+                                                  domain::modulationFor(point, domain::ModulationTarget::gain));
+        runtimeTelemetry.modulatedValues[domain::modulationIndex(domain::ModulationTarget::sinePhase)] = modulatedSinePhase;
+        runtimeTelemetry.modulatedValues[domain::modulationIndex(domain::ModulationTarget::sawShape)] = modulatedSawShape;
+        runtimeTelemetry.modulatedValues[domain::modulationIndex(domain::ModulationTarget::squarePulseWidth)] = modulatedSquarePulseWidth;
+        runtimeTelemetry.modulatedValues[domain::modulationIndex(domain::ModulationTarget::noiseTone)] = modulatedNoiseTone;
+        runtimeTelemetry.modulatedValues[domain::modulationIndex(domain::ModulationTarget::sine)] = modulatedSineLevel;
+        runtimeTelemetry.modulatedValues[domain::modulationIndex(domain::ModulationTarget::saw)] = modulatedSawLevel;
+        runtimeTelemetry.modulatedValues[domain::modulationIndex(domain::ModulationTarget::square)] = modulatedSquareLevel;
+        runtimeTelemetry.modulatedValues[domain::modulationIndex(domain::ModulationTarget::noise)] = modulatedNoiseLevel;
+        runtimeTelemetry.modulatedValues[domain::modulationIndex(domain::ModulationTarget::gain)] = modulatedGain;
 
         float mixedSample = 0.0f;
 
         const auto wrappedPhase = std::fmod(static_cast<float>(phase), juce::MathConstants<float>::twoPi);
         const auto rawSawSample = (wrappedPhase / juce::MathConstants<float>::pi) - 1.0f;
-        const auto sineSample = std::sin(wrappedPhase + currentSinePhase * juce::MathConstants<float>::twoPi);
-        const auto sawSample = rawSawSample + currentSawShape * (triangleSample(rawSawSample) - rawSawSample);
-        const auto squareSample = wrappedPhase < pulseWidth(currentSquarePulseWidth) * juce::MathConstants<float>::twoPi ? 1.0f : -1.0f;
+        const auto sineSample = std::sin(wrappedPhase + modulatedSinePhase * juce::MathConstants<float>::twoPi);
+        const auto sawSample = rawSawSample + modulatedSawShape * (triangleSample(rawSawSample) - rawSawSample);
+        const auto squareSample = wrappedPhase < pulseWidth(modulatedSquarePulseWidth) * juce::MathConstants<float>::twoPi ? 1.0f : -1.0f;
         const auto noiseSample = lowPassNoise(random.nextFloat() * 2.0f - 1.0f,
-                                              noiseCutoffHz(currentNoiseTone),
+                                              noiseCutoffHz(modulatedNoiseTone),
                                               sampleRate,
                                               filteredNoise);
 
-        mixedSample = (sineLevel * sineSample)
-                    + (sawLevel * sawSample)
-                    + (squareLevel * squareSample)
-                    + (noiseLevel * noiseSample);
+        mixedSample = (modulatedSineLevel * sineSample)
+                    + (modulatedSawLevel * sawSample)
+                    + (modulatedSquareLevel * squareSample)
+                    + (modulatedNoiseLevel * noiseSample);
 
-        mixedSample *= 0.18f * gain.getNextValue();
+        mixedSample *= 0.18f * modulatedGain;
+        runtimeTelemetry.waveform[static_cast<std::size_t>(waveformWriteIndex)] = juce::jlimit(-1.0f, 1.0f, mixedSample);
+        waveformWriteIndex = (waveformWriteIndex + 1) % pointRuntimeWaveformSampleCount;
+        runtimeTelemetry.active = true;
 
         const auto currentPan = pan.getNextValue();
         const auto leftGain = panLeftGain(currentPan);
@@ -133,6 +188,18 @@ void PointVoice::render(juce::AudioBuffer<float>& outputBuffer, const int numSam
         while (phase >= juce::MathConstants<double>::twoPi)
             phase -= juce::MathConstants<double>::twoPi;
     }
+}
+
+PointRuntimeTelemetry PointVoice::getRuntimeTelemetry() const
+{
+    auto telemetry = runtimeTelemetry;
+    std::array<float, pointRuntimeWaveformSampleCount> orderedWaveform {};
+
+    for (int index = 0; index < pointRuntimeWaveformSampleCount; ++index)
+        orderedWaveform[static_cast<std::size_t>(index)] = runtimeTelemetry.waveform[static_cast<std::size_t>((waveformWriteIndex + index) % pointRuntimeWaveformSampleCount)];
+
+    telemetry.waveform = orderedWaveform;
+    return telemetry;
 }
 
 float PointVoice::panLeftGain(const float panValue)
