@@ -14,19 +14,41 @@ public:
 
     void paint(juce::Graphics& graphics) override;
     void resized() override;
+    void mouseDoubleClick(const juce::MouseEvent& event) override;
 
     void setViewModel(pointdrone::controller::InspectorViewModel newViewModel);
 
     std::function<void(pointdrone::domain::WaveTimbre)> onWaveTimbreChanged;
     std::function<void(pointdrone::domain::WaveMix)> onWaveMixChanged;
     std::function<void(float)> onGainChanged;
+    std::function<bool(juce::String)> onFrequencyInputSubmitted;
+    std::function<bool(juce::String)> onPanInputSubmitted;
 
 private:
+    enum class EditableField
+    {
+        none,
+        frequency,
+        pan
+    };
+
+    juce::Rectangle<int> frequencyTextBounds() const;
+    juce::Rectangle<int> panTextBounds() const;
+    juce::Rectangle<int> controlsBounds() const;
+    juce::String frequencyEditorText() const;
+    juce::String panEditorText() const;
+    void beginEditing(EditableField field);
+    void submitEditing();
+    void cancelEditing();
+    void hideEditor();
+
     pointdrone::controller::InspectorViewModel viewModel;
     WaveMixSliders waveTimbreSliders;
     WaveMixSliders waveMixSliders;
     juce::Label gainLabel;
     juce::Slider gainSlider;
+    juce::TextEditor inputEditor;
+    EditableField editingField = EditableField::none;
     bool updatingFromState = false;
 };
 }

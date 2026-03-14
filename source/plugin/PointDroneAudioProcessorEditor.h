@@ -26,6 +26,7 @@ private:
 
     pointdrone::ui::AppLookAndFeel lookAndFeel;
     pointdrone::controller::EditorController controller;
+    juce::TextButton snapToSemitoneButton;
     pointdrone::ui::ChartComponent chartComponent;
     pointdrone::ui::PointWavePreview pointWavePreview;
     pointdrone::ui::InspectorPanel inspectorPanel;

@@ -19,6 +19,9 @@ public:
     void handleWaveTimbreChanged(const pointdrone::domain::WaveTimbre& waveTimbre);
     void handleWaveMixChanged(const pointdrone::domain::WaveMix& waveMix);
     void handleGainChanged(float gain);
+    void handleSnapAllPointsToSemitone();
+    bool handleFrequencyInputSubmitted(const juce::String& text);
+    bool handlePanInputSubmitted(const juce::String& text);
 
 private:
     void syncSelectionWithState();

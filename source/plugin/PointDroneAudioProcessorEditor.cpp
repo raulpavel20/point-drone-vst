@@ -9,9 +9,26 @@ namespace pointdrone::plugin
 {
 PointDroneAudioProcessorEditor::PointDroneAudioProcessorEditor(PointDroneAudioProcessor& audioProcessor)
     : AudioProcessorEditor(&audioProcessor),
-      controller(audioProcessor.getProjectState())
+      controller(audioProcessor.getProjectState()),
+      snapToSemitoneButton("|||")
 {
     setLookAndFeel(&lookAndFeel);
+
+    snapToSemitoneButton.setTooltip("Snap all points to nearest semitone");
+    snapToSemitoneButton.setClickingTogglesState(false);
+    snapToSemitoneButton.setConnectedEdges(juce::Button::ConnectedOnLeft
+                                           | juce::Button::ConnectedOnRight
+                                           | juce::Button::ConnectedOnTop
+                                           | juce::Button::ConnectedOnBottom);
+    snapToSemitoneButton.setColour(juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
+    snapToSemitoneButton.setColour(juce::TextButton::buttonOnColourId, pointdrone::core::Theme::accent().withAlpha(0.18f));
+    snapToSemitoneButton.setColour(juce::TextButton::textColourOffId, pointdrone::core::Theme::text());
+    snapToSemitoneButton.setColour(juce::TextButton::textColourOnId, pointdrone::core::Theme::accent());
+    snapToSemitoneButton.onClick = [this]
+    {
+        controller.handleSnapAllPointsToSemitone();
+        refreshViews();
+    };
 
     chartComponent.onBackgroundClicked = [this](const float normalizedX, const float normalizedY)
     {
@@ -55,9 +72,31 @@ PointDroneAudioProcessorEditor::PointDroneAudioProcessorEditor(PointDroneAudioPr
         refreshViews();
     };
 
+    inspectorPanel.onFrequencyInputSubmitted = [this](juce::String text)
+    {
+        const auto accepted = controller.handleFrequencyInputSubmitted(text);
+
+        if (accepted)
+            refreshViews();
+
+        return accepted;
+    };
+
+    inspectorPanel.onPanInputSubmitted = [this](juce::String text)
+    {
+        const auto accepted = controller.handlePanInputSubmitted(text);
+
+        if (accepted)
+            refreshViews();
+
+        return accepted;
+    };
+
     addAndMakeVisible(chartComponent);
     addAndMakeVisible(pointWavePreview);
     addAndMakeVisible(inspectorPanel);
+    addAndMakeVisible(snapToSemitoneButton);
+    snapToSemitoneButton.toFront(false);
 
     setSize(1080, 620);
     refreshViews();
@@ -88,9 +127,11 @@ void PointDroneAudioProcessorEditor::resized()
 
     auto inspectorBounds = bounds.removeFromRight(300);
     auto previewBounds = bounds.removeFromRight(110);
+    auto chartBounds = bounds;
+    snapToSemitoneButton.setBounds(chartBounds.getX() + 12, chartBounds.getY() + 10, 24, 24);
     inspectorPanel.setBounds(inspectorBounds);
     pointWavePreview.setBounds(previewBounds);
-    chartComponent.setBounds(bounds);
+    chartComponent.setBounds(chartBounds);
 }
 
 void PointDroneAudioProcessorEditor::refreshViews()

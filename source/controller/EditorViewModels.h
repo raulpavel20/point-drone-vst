@@ -28,6 +28,8 @@ struct PointWavePreviewViewModel
 struct InspectorViewModel
 {
     bool hasSelection = false;
+    float frequencyHz = 0.0f;
+    float pan = 0.0f;
     pointdrone::domain::WaveTimbre waveTimbre;
     pointdrone::domain::WaveMix waveMix;
     float gain = 1.0f;

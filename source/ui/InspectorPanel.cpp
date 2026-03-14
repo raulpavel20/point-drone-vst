@@ -2,6 +2,7 @@
 
 #include "../core/Theme.h"
 
+#include <cmath>
 #include <utility>
 
 namespace pointdrone::ui
@@ -51,10 +52,20 @@ InspectorPanel::InspectorPanel()
             onGainChanged(static_cast<float>(gainSlider.getValue()));
     };
 
+    inputEditor.setVisible(false);
+    inputEditor.setJustification(juce::Justification::centredLeft);
+    inputEditor.setIndents(0, 0);
+    inputEditor.setBorder(juce::BorderSize<int>(0));
+    inputEditor.setSelectAllWhenFocused(true);
+    inputEditor.onReturnKey = [this] { submitEditing(); };
+    inputEditor.onEscapeKey = [this] { cancelEditing(); };
+    inputEditor.onFocusLost = [this] { submitEditing(); };
+
     addAndMakeVisible(waveTimbreSliders);
     addAndMakeVisible(waveMixSliders);
     addAndMakeVisible(gainLabel);
     addAndMakeVisible(gainSlider);
+    addChildComponent(inputEditor);
     waveTimbreSliders.setEnabledState(false);
     waveMixSliders.setEnabledState(false);
     gainSlider.setEnabled(false);
@@ -83,14 +94,13 @@ void InspectorPanel::paint(juce::Graphics& graphics)
 
     graphics.setColour(pointdrone::core::Theme::text());
     graphics.setFont(14.0f);
-    graphics.drawFittedText(viewModel.frequencyText, contentBounds.removeFromTop(22), juce::Justification::centredLeft, 1);
-    graphics.drawFittedText(viewModel.panText, contentBounds.removeFromTop(22), juce::Justification::centredLeft, 1);
+    graphics.drawFittedText(viewModel.frequencyText, frequencyTextBounds(), juce::Justification::centredLeft, 1);
+    graphics.drawFittedText(viewModel.panText, panTextBounds(), juce::Justification::centredLeft, 1);
 }
 
 void InspectorPanel::resized()
 {
-    auto bounds = getLocalBounds().reduced(12);
-    bounds.removeFromTop(110);
+    auto bounds = controlsBounds();
 
     auto gainBounds = bounds.removeFromRight(48);
     auto rowGap = 16;
@@ -100,11 +110,35 @@ void InspectorPanel::resized()
     waveMixSliders.setBounds(bounds);
     gainLabel.setBounds(gainBounds.removeFromBottom(24));
     gainSlider.setBounds(gainBounds.reduced(6, 0));
+
+    if (editingField == EditableField::frequency)
+        inputEditor.setBounds(frequencyTextBounds());
+    else if (editingField == EditableField::pan)
+        inputEditor.setBounds(panTextBounds());
+}
+
+void InspectorPanel::mouseDoubleClick(const juce::MouseEvent& event)
+{
+    if (! viewModel.hasSelection)
+        return;
+
+    if (frequencyTextBounds().contains(event.getPosition()))
+    {
+        beginEditing(EditableField::frequency);
+        return;
+    }
+
+    if (panTextBounds().contains(event.getPosition()))
+        beginEditing(EditableField::pan);
 }
 
 void InspectorPanel::setViewModel(pointdrone::controller::InspectorViewModel newViewModel)
 {
     viewModel = std::move(newViewModel);
+
+    if (! viewModel.hasSelection)
+        hideEditor();
+
     const juce::ScopedValueSetter<bool> setter(updatingFromState, true);
     waveTimbreSliders.setEnabledState(viewModel.hasSelection);
     waveTimbreSliders.setValues({
@@ -124,5 +158,80 @@ void InspectorPanel::setViewModel(pointdrone::controller::InspectorViewModel new
     gainSlider.setValue(viewModel.gain, juce::dontSendNotification);
     gainLabel.setColour(juce::Label::textColourId, viewModel.hasSelection ? pointdrone::core::Theme::text() : pointdrone::core::Theme::muted());
     repaint();
+}
+
+juce::Rectangle<int> InspectorPanel::frequencyTextBounds() const
+{
+    auto bounds = getLocalBounds().reduced(12);
+    bounds.removeFromTop(36);
+    return bounds.removeFromTop(22);
+}
+
+juce::Rectangle<int> InspectorPanel::panTextBounds() const
+{
+    auto bounds = getLocalBounds().reduced(12);
+    bounds.removeFromTop(58);
+    return bounds.removeFromTop(22);
+}
+
+juce::Rectangle<int> InspectorPanel::controlsBounds() const
+{
+    auto bounds = getLocalBounds().reduced(12);
+    bounds.removeFromTop(110);
+    return bounds;
+}
+
+juce::String InspectorPanel::frequencyEditorText() const
+{
+    return juce::String(viewModel.frequencyHz, 2).trimCharactersAtEnd("0").trimCharactersAtEnd(".");
+}
+
+juce::String InspectorPanel::panEditorText() const
+{
+    const auto panPercent = static_cast<int>(std::round(viewModel.pan * 100.0f));
+    return juce::String(panPercent);
+}
+
+void InspectorPanel::beginEditing(const EditableField field)
+{
+    editingField = field;
+    inputEditor.setText(field == EditableField::frequency ? frequencyEditorText() : panEditorText(),
+                        juce::dontSendNotification);
+    inputEditor.setBounds(field == EditableField::frequency ? frequencyTextBounds() : panTextBounds());
+    inputEditor.setVisible(true);
+    inputEditor.grabKeyboardFocus();
+    inputEditor.selectAll();
+    repaint();
+}
+
+void InspectorPanel::submitEditing()
+{
+    if (editingField == EditableField::none)
+        return;
+
+    auto accepted = false;
+    const auto text = inputEditor.getText();
+
+    if (editingField == EditableField::frequency && onFrequencyInputSubmitted != nullptr)
+        accepted = onFrequencyInputSubmitted(text);
+    else if (editingField == EditableField::pan && onPanInputSubmitted != nullptr)
+        accepted = onPanInputSubmitted(text);
+
+    hideEditor();
+
+    if (! accepted)
+        repaint();
+}
+
+void InspectorPanel::cancelEditing()
+{
+    hideEditor();
+    repaint();
+}
+
+void InspectorPanel::hideEditor()
+{
+    editingField = EditableField::none;
+    inputEditor.setVisible(false);
 }
 }
