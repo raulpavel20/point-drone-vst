@@ -18,9 +18,13 @@ public:
     void setViewModel(pointdrone::controller::InspectorViewModel newViewModel);
 
     std::function<void(pointdrone::domain::WaveMix)> onWaveMixChanged;
+    std::function<void(float)> onGainChanged;
 
 private:
     pointdrone::controller::InspectorViewModel viewModel;
     WaveMixSliders waveMixSliders;
+    juce::Label gainLabel;
+    juce::Slider gainSlider;
+    bool updatingFromState = false;
 };
 }

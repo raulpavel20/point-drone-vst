@@ -57,6 +57,8 @@ target_sources(PointDrone
         source/ui/ChartComponent.h
         source/ui/InspectorPanel.cpp
         source/ui/InspectorPanel.h
+        source/ui/PointWavePreview.cpp
+        source/ui/PointWavePreview.h
         source/ui/WaveMixSliders.cpp
         source/ui/WaveMixSliders.h
 )

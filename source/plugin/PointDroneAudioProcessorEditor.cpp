@@ -43,10 +43,17 @@ PointDroneAudioProcessorEditor::PointDroneAudioProcessorEditor(PointDroneAudioPr
         refreshViews();
     };
 
+    inspectorPanel.onGainChanged = [this](const float gain)
+    {
+        controller.handleGainChanged(gain);
+        refreshViews();
+    };
+
     addAndMakeVisible(chartComponent);
+    addAndMakeVisible(pointWavePreview);
     addAndMakeVisible(inspectorPanel);
 
-    setSize(980, 620);
+    setSize(1080, 620);
     refreshViews();
 }
 
@@ -73,8 +80,10 @@ void PointDroneAudioProcessorEditor::resized()
     auto bounds = getLocalBounds().reduced(16);
     bounds.removeFromTop(56);
 
-    auto inspectorBounds = bounds.removeFromRight(260);
+    auto inspectorBounds = bounds.removeFromRight(300);
+    auto previewBounds = bounds.removeFromRight(110);
     inspectorPanel.setBounds(inspectorBounds);
+    pointWavePreview.setBounds(previewBounds);
     chartComponent.setBounds(bounds);
 }
 
@@ -82,6 +91,7 @@ void PointDroneAudioProcessorEditor::refreshViews()
 {
     auto viewState = controller.getViewState();
     chartComponent.setViewModel(std::move(viewState.chart));
+    pointWavePreview.setViewModel(std::move(viewState.wavePreview));
     inspectorPanel.setViewModel(std::move(viewState.inspector));
 }
 }

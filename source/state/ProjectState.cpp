@@ -68,6 +68,22 @@ bool ProjectState::updatePointPosition(const juce::String& pointId, const float 
     return false;
 }
 
+bool ProjectState::updatePointGain(const juce::String& pointId, const float gain)
+{
+    const juce::ScopedLock lock(mutex);
+
+    for (auto pointTree : pointsTree())
+    {
+        if (pointTree.getProperty(idProperty()).toString() != pointId)
+            continue;
+
+        pointTree.setProperty(gainProperty(), gain, nullptr);
+        return true;
+    }
+
+    return false;
+}
+
 bool ProjectState::updatePointWaveMix(const juce::String& pointId, const domain::WaveMix& waveMix)
 {
     const juce::ScopedLock lock(mutex);
@@ -120,6 +136,7 @@ juce::Identifier ProjectState::snapshotType() { return "SNAPSHOT"; }
 juce::Identifier ProjectState::idProperty() { return "id"; }
 juce::Identifier ProjectState::frequencyProperty() { return "frequencyHz"; }
 juce::Identifier ProjectState::panProperty() { return "pan"; }
+juce::Identifier ProjectState::gainProperty() { return "gain"; }
 juce::Identifier ProjectState::sineProperty() { return "sine"; }
 juce::Identifier ProjectState::sawProperty() { return "saw"; }
 juce::Identifier ProjectState::squareProperty() { return "square"; }
@@ -132,6 +149,7 @@ domain::PointModel ProjectState::pointFromValueTree(const juce::ValueTree& point
     point.id = pointTree.getProperty(idProperty()).toString();
     point.frequencyHz = static_cast<float>(pointTree.getProperty(frequencyProperty()));
     point.pan = static_cast<float>(pointTree.getProperty(panProperty()));
+    point.gain = static_cast<float>(pointTree.getProperty(gainProperty(), 1.0f));
     point.waveMix.sine = static_cast<float>(pointTree.getProperty(sineProperty()));
     point.waveMix.saw = static_cast<float>(pointTree.getProperty(sawProperty()));
     point.waveMix.square = static_cast<float>(pointTree.getProperty(squareProperty()));
@@ -145,6 +163,7 @@ juce::ValueTree ProjectState::pointToValueTree(const domain::PointModel& point)
     pointTree.setProperty(idProperty(), point.id, nullptr);
     pointTree.setProperty(frequencyProperty(), point.frequencyHz, nullptr);
     pointTree.setProperty(panProperty(), point.pan, nullptr);
+    pointTree.setProperty(gainProperty(), point.gain, nullptr);
     pointTree.setProperty(sineProperty(), point.waveMix.sine, nullptr);
     pointTree.setProperty(sawProperty(), point.waveMix.saw, nullptr);
     pointTree.setProperty(squareProperty(), point.waveMix.square, nullptr);

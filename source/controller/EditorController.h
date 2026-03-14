@@ -17,11 +17,13 @@ public:
     void handlePointDragged(const juce::String& pointId, float normalizedX, float normalizedY);
     void handlePointDoubleClicked(const juce::String& pointId);
     void handleWaveMixChanged(const pointdrone::domain::WaveMix& waveMix);
+    void handleGainChanged(float gain);
 
 private:
     void syncSelectionWithState();
 
     static ChartViewModel createChartViewModel(const pointdrone::domain::ProjectModel& model, const juce::String& selectedPointId);
+    static PointWavePreviewViewModel createWavePreviewViewModel(const pointdrone::domain::ProjectModel& model, const juce::String& selectedPointId);
     static InspectorViewModel createInspectorViewModel(const pointdrone::domain::ProjectModel& model, const juce::String& selectedPointId);
 
     pointdrone::state::ProjectState& state;

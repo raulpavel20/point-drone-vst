@@ -19,10 +19,17 @@ struct ChartViewModel
     std::vector<ChartPointViewModel> points;
 };
 
+struct PointWavePreviewViewModel
+{
+    bool hasSelection = false;
+    std::vector<float> samples;
+};
+
 struct InspectorViewModel
 {
     bool hasSelection = false;
     pointdrone::domain::WaveMix waveMix;
+    float gain = 1.0f;
     juce::String frequencyText = "[FREQ --]";
     juce::String panText = "[PAN --]";
 };
@@ -30,6 +37,7 @@ struct InspectorViewModel
 struct EditorViewState
 {
     ChartViewModel chart;
+    PointWavePreviewViewModel wavePreview;
     InspectorViewModel inspector;
 };
 }

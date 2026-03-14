@@ -24,6 +24,7 @@ private:
 
     juce::SmoothedValue<float> frequencyHz;
     juce::SmoothedValue<float> pan;
+    juce::SmoothedValue<float> gain;
     juce::SmoothedValue<float> sine;
     juce::SmoothedValue<float> saw;
     juce::SmoothedValue<float> square;

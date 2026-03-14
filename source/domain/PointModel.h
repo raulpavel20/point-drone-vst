@@ -17,6 +17,7 @@ struct PointModel
     juce::String id;
     float frequencyHz = 220.0f;
     float pan = 0.0f;
+    float gain = 1.0f;
     WaveMix waveMix;
 };
 }

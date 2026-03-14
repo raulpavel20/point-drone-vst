@@ -9,6 +9,7 @@ void PointVoice::prepare(const double newSampleRate)
     sampleRate = newSampleRate;
     frequencyHz.reset(sampleRate, 0.03);
     pan.reset(sampleRate, 0.03);
+    gain.reset(sampleRate, 0.03);
     sine.reset(sampleRate, 0.03);
     saw.reset(sampleRate, 0.03);
     square.reset(sampleRate, 0.03);
@@ -22,6 +23,7 @@ void PointVoice::render(juce::AudioBuffer<float>& outputBuffer, const int numSam
     {
         frequencyHz.setCurrentAndTargetValue(point.frequencyHz);
         pan.setCurrentAndTargetValue(point.pan);
+        gain.setCurrentAndTargetValue(point.gain);
         sine.setCurrentAndTargetValue(point.waveMix.sine);
         saw.setCurrentAndTargetValue(point.waveMix.saw);
         square.setCurrentAndTargetValue(point.waveMix.square);
@@ -31,6 +33,7 @@ void PointVoice::render(juce::AudioBuffer<float>& outputBuffer, const int numSam
 
     frequencyHz.setTargetValue(point.frequencyHz);
     pan.setTargetValue(point.pan);
+    gain.setTargetValue(point.gain);
     sine.setTargetValue(point.waveMix.sine);
     saw.setTargetValue(point.waveMix.saw);
     square.setTargetValue(point.waveMix.square);
@@ -73,7 +76,7 @@ void PointVoice::render(juce::AudioBuffer<float>& outputBuffer, const int numSam
                         + (normalizedNoise * noiseSample);
         }
 
-        mixedSample *= 0.18f;
+        mixedSample *= 0.18f * gain.getNextValue();
 
         const auto currentPan = pan.getNextValue();
         const auto leftGain = panLeftGain(currentPan);
