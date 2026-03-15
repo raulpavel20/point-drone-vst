@@ -3,6 +3,7 @@
 #include <juce_core/juce_core.h>
 
 #include <array>
+#include <cmath>
 
 namespace pointdrone::domain
 {
@@ -51,8 +52,11 @@ inline constexpr std::array<ModulationTarget, modulationTargetCount> allModulati
 
 struct ModulationSettings
 {
-    float amplitude = 0.15f;
-    float frequency = 0.25f;
+    float amplitude = 1.0f;
+    // That number represents a value of 1Hz, converted into the knob's normalized 0-1 range.
+    // 0.03Hz is the minimum frequency, 10Hz is the maximum frequency.
+    // (0 - log(0.03)) / (log(10.0) - log(0.03))
+    float frequency = 0.6036274030724842f;
     float ease = 0.5f;
     float slant = 0.5f;
     float cyclic = 0.0f;

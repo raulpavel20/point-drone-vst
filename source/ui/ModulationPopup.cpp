@@ -81,33 +81,9 @@ void ModulationPopup::paint(juce::Graphics& graphics)
     const auto topGuideY = currentPreviewBounds.getY() + 6.0f;
     const auto bottomGuideY = currentPreviewBounds.getBottom() - 6.0f;
     const auto centerY = juce::jmap(0.5f, 0.0f, 1.0f, bottomGuideY, topGuideY);
-    graphics.setColour(pointdrone::core::Theme::muted().withAlpha(0.55f));
-    graphics.drawLine(leftX, topGuideY, rightX, topGuideY, 1.0f);
-    graphics.drawLine(leftX, bottomGuideY, rightX, bottomGuideY, 1.0f);
     graphics.setColour(pointdrone::core::Theme::muted());
     graphics.drawLine(leftX, centerY, rightX, centerY, 1.2f);
     graphics.setFont(11.0f);
-    graphics.drawFittedText("[MAX]",
-                            juce::Rectangle<int>(static_cast<int>(currentPreviewBounds.getX()) + 4,
-                                                 static_cast<int>(topGuideY) - 8,
-                                                 52,
-                                                 14),
-                            juce::Justification::centredLeft,
-                            1);
-    graphics.drawFittedText("[MID]",
-                            juce::Rectangle<int>(static_cast<int>(currentPreviewBounds.getX()) + 4,
-                                                 static_cast<int>(centerY) - 8,
-                                                 52,
-                                                 14),
-                            juce::Justification::centredLeft,
-                            1);
-    graphics.drawFittedText("[MIN]",
-                            juce::Rectangle<int>(static_cast<int>(currentPreviewBounds.getX()) + 4,
-                                                 static_cast<int>(bottomGuideY) - 8,
-                                                 52,
-                                                 14),
-                            juce::Justification::centredLeft,
-                            1);
 
     juce::Path waveform;
     juce::Path fillPath;
@@ -239,7 +215,7 @@ juce::Rectangle<float> ModulationPopup::previewBounds() const
     auto bounds = getLocalBounds().reduced(12);
     bounds.removeFromTop(118);
     bounds.removeFromBottom(8);
-    return bounds.toFloat();
+    return bounds.toFloat().translated(0.0f, 8.0f);
 }
 
 juce::String ModulationPopup::amplitudeInfoText() const
