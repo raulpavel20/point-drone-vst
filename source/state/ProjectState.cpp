@@ -4,6 +4,18 @@ namespace pointdrone::state
 {
 namespace
 {
+constexpr float maximumSnapshotTransitionSeconds = 10.0f;
+
+juce::String snapshotIdForSlot(const int slotIndex)
+{
+    return "snapshot-slot-" + juce::String(slotIndex + 1);
+}
+
+juce::String snapshotNameForSlot(const int slotIndex)
+{
+    return "[SNAP " + juce::String(slotIndex + 1) + "]";
+}
+
 juce::ValueTree findModulationTree(const juce::ValueTree& pointTree, const juce::Identifier modulationsType, const juce::Identifier targetProperty, const domain::ModulationTarget target)
 {
     if (const auto modulationsTree = pointTree.getChildWithName(modulationsType); modulationsTree.isValid())
@@ -16,6 +28,15 @@ juce::ValueTree findModulationTree(const juce::ValueTree& pointTree, const juce:
     }
 
     return {};
+}
+
+domain::SnapshotModel emptySnapshotForSlot(const int slotIndex)
+{
+    domain::SnapshotModel snapshot;
+    snapshot.id = snapshotIdForSlot(slotIndex);
+    snapshot.slotIndex = slotIndex;
+    snapshot.name = snapshotNameForSlot(slotIndex);
+    return snapshot;
 }
 }
 
@@ -30,12 +51,21 @@ domain::ProjectModel ProjectState::getModel() const
 
     domain::ProjectModel model;
     model.outputGain = static_cast<float>(rootState.getProperty(outputGainProperty(), 1.0f));
+    model.snapshotTransitionSeconds = static_cast<float>(rootState.getProperty(snapshotTransitionSecondsProperty(), 0.0f));
+
+    for (std::size_t slotIndex = 0; slotIndex < domain::snapshotSlotCount; ++slotIndex)
+        model.snapshots[slotIndex] = emptySnapshotForSlot(static_cast<int>(slotIndex));
 
     for (const auto pointTree : pointsTree())
         model.points.push_back(pointFromValueTree(pointTree));
 
     for (const auto snapshotTree : snapshotsTree())
-        model.snapshots.push_back(snapshotFromValueTree(snapshotTree));
+    {
+        auto snapshot = snapshotFromValueTree(snapshotTree);
+
+        if (snapshot.slotIndex >= 0 && snapshot.slotIndex < static_cast<int>(domain::snapshotSlotCount))
+            model.snapshots[static_cast<std::size_t>(snapshot.slotIndex)] = std::move(snapshot);
+    }
 
     return model;
 }
@@ -192,6 +222,108 @@ bool ProjectState::updatePointWaveMix(const juce::String& pointId, const domain:
     return false;
 }
 
+bool ProjectState::updateSnapshotTransitionSeconds(const float seconds)
+{
+    const juce::ScopedLock lock(mutex);
+    rootState.setProperty(snapshotTransitionSecondsProperty(), juce::jlimit(0.0f, maximumSnapshotTransitionSeconds, seconds), nullptr);
+    return true;
+}
+
+bool ProjectState::saveSnapshotSlot(const int slotIndex)
+{
+    if (slotIndex < 0 || slotIndex >= static_cast<int>(domain::snapshotSlotCount))
+        return false;
+
+    const juce::ScopedLock lock(mutex);
+    auto snapshot = emptySnapshotForSlot(slotIndex);
+    snapshot.hasData = true;
+
+    for (const auto pointTree : pointsTree())
+        snapshot.points.push_back(pointFromValueTree(pointTree));
+
+    const auto newSnapshotTree = snapshotToValueTree(snapshot);
+    auto snapshots = snapshotsTree();
+    auto existingSnapshotTree = snapshotTreeForSlot(slotIndex);
+
+    if (existingSnapshotTree.isValid())
+    {
+        const auto existingIndex = snapshots.indexOf(existingSnapshotTree);
+        snapshots.removeChild(existingSnapshotTree, nullptr);
+        snapshots.addChild(newSnapshotTree, existingIndex, nullptr);
+        return true;
+    }
+
+    snapshots.appendChild(newSnapshotTree, nullptr);
+    return true;
+}
+
+std::optional<domain::SnapshotModel> ProjectState::getSnapshotSlot(const int slotIndex) const
+{
+    if (slotIndex < 0 || slotIndex >= static_cast<int>(domain::snapshotSlotCount))
+        return std::nullopt;
+
+    const juce::ScopedLock lock(mutex);
+    const auto snapshotTree = snapshotTreeForSlot(slotIndex);
+
+    if (! snapshotTree.isValid())
+        return std::nullopt;
+
+    auto snapshot = snapshotFromValueTree(snapshotTree);
+
+    if (! snapshot.hasData)
+        return std::nullopt;
+
+    return snapshot;
+}
+
+bool ProjectState::applySnapshotPoints(const std::vector<domain::PointModel>& points)
+{
+    const juce::ScopedLock lock(mutex);
+    auto changed = false;
+
+    for (auto pointTree : pointsTree())
+    {
+        const auto pointId = pointTree.getProperty(idProperty()).toString();
+
+        for (const auto& point : points)
+        {
+            if (point.id != pointId)
+                continue;
+
+            pointTree.setProperty(frequencyProperty(), point.frequencyHz, nullptr);
+            pointTree.setProperty(panProperty(), point.pan, nullptr);
+            pointTree.setProperty(gainProperty(), point.gain, nullptr);
+            pointTree.setProperty(sinePhaseProperty(), point.waveTimbre.sinePhase, nullptr);
+            pointTree.setProperty(sawShapeProperty(), point.waveTimbre.sawShape, nullptr);
+            pointTree.setProperty(squarePulseWidthProperty(), point.waveTimbre.squarePulseWidth, nullptr);
+            pointTree.setProperty(noiseToneProperty(), point.waveTimbre.noiseTone, nullptr);
+            pointTree.setProperty(sineProperty(), point.waveMix.sine, nullptr);
+            pointTree.setProperty(sawProperty(), point.waveMix.saw, nullptr);
+            pointTree.setProperty(squareProperty(), point.waveMix.square, nullptr);
+            pointTree.setProperty(noiseProperty(), point.waveMix.noise, nullptr);
+
+            for (const auto target : domain::allModulationTargets)
+            {
+                if (auto modulationTree = findModulationTree(pointTree, modulationsType(), targetProperty(), target); modulationTree.isValid())
+                {
+                    const auto& modulation = domain::modulationFor(point, target);
+                    modulationTree.setProperty(amplitudeProperty(), modulation.settings.amplitude, nullptr);
+                    modulationTree.setProperty(modulationFrequencyProperty(), modulation.settings.frequency, nullptr);
+                    modulationTree.setProperty(easeProperty(), modulation.settings.ease, nullptr);
+                    modulationTree.setProperty(slantProperty(), modulation.settings.slant, nullptr);
+                    modulationTree.setProperty(cyclicProperty(), modulation.settings.cyclic, nullptr);
+                    modulationTree.setProperty(jitterProperty(), modulation.settings.jitter, nullptr);
+                }
+            }
+
+            changed = true;
+            break;
+        }
+    }
+
+    return changed;
+}
+
 bool ProjectState::containsPoint(const juce::String& pointId) const
 {
     const juce::ScopedLock lock(mutex);
@@ -215,6 +347,45 @@ void ProjectState::replaceState(const juce::ValueTree& newState)
 {
     const juce::ScopedLock lock(mutex);
     rootState = newState.isValid() ? newState.createCopy() : createDefaultState();
+
+    if (! rootState.hasProperty(outputGainProperty()))
+        rootState.setProperty(outputGainProperty(), 1.0f, nullptr);
+
+    if (! rootState.hasProperty(snapshotTransitionSecondsProperty()))
+        rootState.setProperty(snapshotTransitionSecondsProperty(), 0.0f, nullptr);
+
+    if (! pointsTree().isValid())
+        rootState.appendChild(juce::ValueTree(pointsType()), nullptr);
+
+    if (! snapshotsTree().isValid())
+        rootState.appendChild(juce::ValueTree(snapshotsType()), nullptr);
+
+    auto snapshots = snapshotsTree();
+
+    for (int childIndex = 0; childIndex < snapshots.getNumChildren(); ++childIndex)
+    {
+        auto snapshotTree = snapshots.getChild(childIndex);
+
+        if (! snapshotTree.hasProperty(slotProperty()))
+            snapshotTree.setProperty(slotProperty(), childIndex, nullptr);
+
+        const auto slotIndex = static_cast<int>(snapshotTree.getProperty(slotProperty(), childIndex));
+
+        if (! snapshotTree.hasProperty(idProperty()))
+            snapshotTree.setProperty(idProperty(), snapshotIdForSlot(slotIndex), nullptr);
+
+        if (! snapshotTree.hasProperty(hasDataProperty()))
+            snapshotTree.setProperty(hasDataProperty(), snapshotTree.getNumChildren() > 0, nullptr);
+
+        if (! snapshotTree.hasProperty(nameProperty()))
+            snapshotTree.setProperty(nameProperty(), snapshotNameForSlot(slotIndex), nullptr);
+    }
+
+    for (std::size_t slotIndex = 0; slotIndex < domain::snapshotSlotCount; ++slotIndex)
+    {
+        if (! snapshotTreeForSlot(static_cast<int>(slotIndex)).isValid())
+            snapshots.appendChild(snapshotToValueTree(emptySnapshotForSlot(static_cast<int>(slotIndex))), nullptr);
+    }
 }
 
 juce::Identifier ProjectState::projectType() { return "PROJECT"; }
@@ -225,6 +396,8 @@ juce::Identifier ProjectState::modulationType() { return "MODULATION"; }
 juce::Identifier ProjectState::snapshotsType() { return "SNAPSHOTS"; }
 juce::Identifier ProjectState::snapshotType() { return "SNAPSHOT"; }
 juce::Identifier ProjectState::idProperty() { return "id"; }
+juce::Identifier ProjectState::slotProperty() { return "slot"; }
+juce::Identifier ProjectState::hasDataProperty() { return "hasData"; }
 juce::Identifier ProjectState::targetProperty() { return "target"; }
 juce::Identifier ProjectState::enabledProperty() { return "enabled"; }
 juce::Identifier ProjectState::amplitudeProperty() { return "amplitude"; }
@@ -246,6 +419,7 @@ juce::Identifier ProjectState::sawProperty() { return "saw"; }
 juce::Identifier ProjectState::squareProperty() { return "square"; }
 juce::Identifier ProjectState::noiseProperty() { return "noise"; }
 juce::Identifier ProjectState::nameProperty() { return "name"; }
+juce::Identifier ProjectState::snapshotTransitionSecondsProperty() { return "snapshotTransitionSeconds"; }
 
 domain::PointModel ProjectState::pointFromValueTree(const juce::ValueTree& pointTree)
 {
@@ -274,12 +448,12 @@ domain::PointModel ProjectState::pointFromValueTree(const juce::ValueTree& point
 
             auto& modulation = point.modulations[static_cast<std::size_t>(targetValue)];
             modulation.enabled = static_cast<bool>(modulationTree.getProperty(enabledProperty(), false));
-            modulation.settings.amplitude = static_cast<float>(modulationTree.getProperty(amplitudeProperty(), 0.15f));
-            modulation.settings.frequency = static_cast<float>(modulationTree.getProperty(modulationFrequencyProperty(), 0.25f));
-            modulation.settings.ease = static_cast<float>(modulationTree.getProperty(easeProperty(), 0.5f));
-            modulation.settings.slant = static_cast<float>(modulationTree.getProperty(slantProperty(), 0.5f));
-            modulation.settings.cyclic = static_cast<float>(modulationTree.getProperty(cyclicProperty(), 0.0f));
-            modulation.settings.jitter = static_cast<float>(modulationTree.getProperty(jitterProperty(), 0.0f));
+            modulation.settings.amplitude = static_cast<float>(modulationTree.getProperty(amplitudeProperty(), domain::ModulationSettings {}.amplitude));
+            modulation.settings.frequency = static_cast<float>(modulationTree.getProperty(modulationFrequencyProperty(), domain::ModulationSettings {}.frequency));
+            modulation.settings.ease = static_cast<float>(modulationTree.getProperty(easeProperty(), domain::ModulationSettings {}.ease));
+            modulation.settings.slant = static_cast<float>(modulationTree.getProperty(slantProperty(), domain::ModulationSettings {}.slant));
+            modulation.settings.cyclic = static_cast<float>(modulationTree.getProperty(cyclicProperty(), domain::ModulationSettings {}.cyclic));
+            modulation.settings.jitter = static_cast<float>(modulationTree.getProperty(jitterProperty(), domain::ModulationSettings {}.jitter));
         }
     }
 
@@ -329,8 +503,10 @@ juce::ValueTree ProjectState::pointToValueTree(const domain::PointModel& point, 
 domain::SnapshotModel ProjectState::snapshotFromValueTree(const juce::ValueTree& snapshotTree)
 {
     domain::SnapshotModel snapshot;
-    snapshot.id = snapshotTree.getProperty(idProperty()).toString();
-    snapshot.name = snapshotTree.getProperty(nameProperty()).toString();
+    snapshot.slotIndex = static_cast<int>(snapshotTree.getProperty(slotProperty(), 0));
+    snapshot.id = snapshotTree.getProperty(idProperty(), snapshotIdForSlot(snapshot.slotIndex)).toString();
+    snapshot.hasData = static_cast<bool>(snapshotTree.getProperty(hasDataProperty(), false));
+    snapshot.name = snapshotTree.getProperty(nameProperty(), snapshotNameForSlot(snapshot.slotIndex)).toString();
 
     for (const auto pointTree : snapshotTree)
     {
@@ -345,6 +521,8 @@ juce::ValueTree ProjectState::snapshotToValueTree(const domain::SnapshotModel& s
 {
     juce::ValueTree snapshotTree(snapshotType());
     snapshotTree.setProperty(idProperty(), snapshot.id, nullptr);
+    snapshotTree.setProperty(slotProperty(), snapshot.slotIndex, nullptr);
+    snapshotTree.setProperty(hasDataProperty(), snapshot.hasData, nullptr);
     snapshotTree.setProperty(nameProperty(), snapshot.name, nullptr);
 
     for (const auto& point : snapshot.points)
@@ -357,8 +535,15 @@ juce::ValueTree ProjectState::createDefaultState()
 {
     juce::ValueTree project(projectType());
     project.setProperty(outputGainProperty(), 1.0f, nullptr);
+    project.setProperty(snapshotTransitionSecondsProperty(), 0.0f, nullptr);
     project.appendChild(juce::ValueTree(pointsType()), nullptr);
-    project.appendChild(juce::ValueTree(snapshotsType()), nullptr);
+
+    juce::ValueTree snapshots(snapshotsType());
+
+    for (std::size_t slotIndex = 0; slotIndex < domain::snapshotSlotCount; ++slotIndex)
+        snapshots.appendChild(snapshotToValueTree(emptySnapshotForSlot(static_cast<int>(slotIndex))), nullptr);
+
+    project.appendChild(snapshots, nullptr);
     return project;
 }
 
@@ -370,5 +555,21 @@ juce::ValueTree ProjectState::pointsTree() const
 juce::ValueTree ProjectState::snapshotsTree() const
 {
     return rootState.getChildWithName(snapshotsType());
+}
+
+juce::ValueTree ProjectState::snapshotTreeForSlot(const int slotIndex) const
+{
+    auto snapshots = snapshotsTree();
+
+    for (const auto snapshotTree : snapshots)
+    {
+        if (static_cast<int>(snapshotTree.getProperty(slotProperty(), -1)) == slotIndex)
+            return snapshotTree;
+    }
+
+    if (slotIndex >= 0 && slotIndex < snapshots.getNumChildren())
+        return snapshots.getChild(slotIndex);
+
+    return {};
 }
 }

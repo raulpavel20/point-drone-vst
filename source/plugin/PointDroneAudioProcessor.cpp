@@ -63,7 +63,7 @@ const juce::String PointDroneAudioProcessor::getName() const
 
 bool PointDroneAudioProcessor::acceptsMidi() const
 {
-    return false;
+    return true;
 }
 
 bool PointDroneAudioProcessor::producesMidi() const

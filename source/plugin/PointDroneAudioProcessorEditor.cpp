@@ -31,6 +31,18 @@ PointDroneAudioProcessorEditor::PointDroneAudioProcessorEditor(PointDroneAudioPr
         refreshViews();
     };
 
+    snapshotSlots.onSlotPressed = [this](const int slotIndex, const bool saveRequested)
+    {
+        controller.handleSnapshotSlotPressed(slotIndex, saveRequested);
+        refreshViews();
+    };
+
+    snapshotTransitionStrip.onTransitionSecondsChanged = [this](const float seconds)
+    {
+        controller.handleSnapshotTransitionSecondsChanged(seconds);
+        refreshViews();
+    };
+
     chartComponent.onBackgroundClicked = [this](const float normalizedX, const float normalizedY)
     {
         controller.handleChartBackgroundClicked(normalizedX, normalizedY);
@@ -124,6 +136,8 @@ PointDroneAudioProcessorEditor::PointDroneAudioProcessorEditor(PointDroneAudioPr
         refreshViews();
     };
 
+    addAndMakeVisible(snapshotSlots);
+    addAndMakeVisible(snapshotTransitionStrip);
     addAndMakeVisible(chartComponent);
     addAndMakeVisible(pointWavePreview);
     addAndMakeVisible(inspectorPanel);
@@ -165,7 +179,13 @@ void PointDroneAudioProcessorEditor::resized()
     auto inspectorBounds = bounds.removeFromRight(300);
     auto previewBounds = bounds.removeFromRight(110);
     auto chartBounds = bounds;
+    auto snapshotSlotsBounds = chartBounds.removeFromLeft(54);
+    chartBounds.removeFromLeft(10);
+    auto snapshotTransitionBounds = chartBounds.removeFromLeft(48);
+    chartBounds.removeFromLeft(12);
     snapToSemitoneButton.setBounds(chartBounds.getX() + 12, chartBounds.getY() + 10, 24, 24);
+    snapshotSlots.setBounds(snapshotSlotsBounds);
+    snapshotTransitionStrip.setBounds(snapshotTransitionBounds);
     masterOutputStrip.setBounds(masterOutputBounds);
     inspectorPanel.setBounds(inspectorBounds);
     pointWavePreview.setBounds(previewBounds);
@@ -180,6 +200,8 @@ void PointDroneAudioProcessorEditor::refreshViews()
     pointWavePreview.setViewModel(std::move(viewState.wavePreview));
     inspectorPanel.setViewModel(std::move(viewState.inspector));
     masterOutputStrip.setViewModel(std::move(viewState.masterOutput));
+    snapshotSlots.setViewModel(std::move(viewState.snapshotControls.slots));
+    snapshotTransitionStrip.setTransitionSeconds(viewState.snapshotControls.transitionSeconds);
     modulationPopup.setViewModel(std::move(viewState.modulationPopup));
 
     if (cachedTelemetry.has_value() && cachedTelemetryPointId == controller.getSelectedPointId())
@@ -191,6 +213,13 @@ void PointDroneAudioProcessorEditor::refreshViews()
 
 void PointDroneAudioProcessorEditor::timerCallback()
 {
+    const auto currentTimestampMs = juce::Time::getMillisecondCounterHiRes();
+    const auto deltaSeconds = lastTimerTimestampMs > 0.0 ? (currentTimestampMs - lastTimerTimestampMs) * 0.001 : 0.0;
+    lastTimerTimestampMs = currentTimestampMs;
+
+    if (controller.advanceSnapshotMorph(deltaSeconds))
+        refreshViews();
+
     const auto selectedPointId = controller.getSelectedPointId();
 
     if (const auto telemetry = audioProcessor.getPointRuntimeTelemetry(selectedPointId); telemetry.has_value())

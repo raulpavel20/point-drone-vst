@@ -30,10 +30,23 @@ public:
     void handleModulationPopupClosed();
     void handleModulationSettingsChanged(const pointdrone::domain::ModulationSettings& settings);
     void handleSnapAllPointsToSemitone();
+    void handleSnapshotSlotPressed(int slotIndex, bool saveRequested);
+    void handleSnapshotTransitionSecondsChanged(float seconds);
+    bool advanceSnapshotMorph(double deltaSeconds);
     bool handleFrequencyInputSubmitted(const juce::String& text);
     bool handlePanInputSubmitted(const juce::String& text);
 
 private:
+    struct SnapshotMorphState
+    {
+        int targetSlotIndex = -1;
+        float elapsedSeconds = 0.0f;
+        float durationSeconds = 0.0f;
+        std::vector<pointdrone::domain::PointModel> sourcePoints;
+        std::vector<pointdrone::domain::PointModel> targetPoints;
+    };
+
+    void clearActiveSnapshotPlayback(bool keepActiveSlot = false);
     void syncSelectionWithState();
 
     static ChartViewModel createChartViewModel(const pointdrone::domain::ProjectModel& model, const juce::String& selectedPointId);
@@ -41,6 +54,7 @@ private:
     static PointWavePreviewViewModel createWavePreviewViewModel(const pointdrone::domain::PointModel& point);
     static InspectorViewModel createInspectorViewModel(const pointdrone::domain::ProjectModel& model, const juce::String& selectedPointId);
     static MasterOutputViewModel createMasterOutputViewModel(const pointdrone::domain::ProjectModel& model);
+    SnapshotControlsViewModel createSnapshotControlsViewModel(const pointdrone::domain::ProjectModel& model) const;
     static ModulationPopupViewModel createModulationPopupViewModel(const pointdrone::domain::ProjectModel& model,
                                                                   const juce::String& selectedPointId,
                                                                   const std::optional<pointdrone::domain::ModulationTarget>& editingModulationTarget);
@@ -48,5 +62,7 @@ private:
     pointdrone::state::ProjectState& state;
     juce::String selectedPointId;
     std::optional<pointdrone::domain::ModulationTarget> editingModulationTarget;
+    std::optional<int> activeSnapshotSlotIndex;
+    std::optional<SnapshotMorphState> activeSnapshotMorph;
 };
 }

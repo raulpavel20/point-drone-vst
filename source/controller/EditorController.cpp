@@ -15,6 +15,7 @@ constexpr int previewSampleCount = 192;
 constexpr float previewCycles = 2.0f;
 constexpr double previewSampleRate = 44100.0;
 constexpr int modulationPreviewSampleCount = 256;
+constexpr float maximumSnapshotTransitionSeconds = 10.0f;
 
 juce::String noteIndicatorText(const float frequencyHz)
 {
@@ -99,6 +100,63 @@ std::optional<pointdrone::domain::PointModel> selectedPointFromModel(const point
     }
 
     return std::nullopt;
+}
+
+std::optional<pointdrone::domain::PointModel> pointById(const std::vector<pointdrone::domain::PointModel>& points, const juce::String& pointId)
+{
+    for (const auto& point : points)
+    {
+        if (point.id == pointId)
+            return point;
+    }
+
+    return std::nullopt;
+}
+
+float interpolateLinear(const float startValue, const float endValue, const float amount)
+{
+    return juce::jmap(juce::jlimit(0.0f, 1.0f, amount), startValue, endValue);
+}
+
+float interpolateFrequencyHz(const float startValue, const float endValue, const float amount)
+{
+    const auto clampedAmount = juce::jlimit(0.0f, 1.0f, amount);
+    const auto startLog = std::log(juce::jmax(1.0f, startValue));
+    const auto endLog = std::log(juce::jmax(1.0f, endValue));
+    return static_cast<float>(std::exp(juce::jmap(clampedAmount, startLog, endLog)));
+}
+
+pointdrone::domain::PointModel interpolatePoint(const pointdrone::domain::PointModel& sourcePoint,
+                                                const pointdrone::domain::PointModel& targetPoint,
+                                                const float amount)
+{
+    auto point = sourcePoint;
+    point.frequencyHz = interpolateFrequencyHz(sourcePoint.frequencyHz, targetPoint.frequencyHz, amount);
+    point.pan = interpolateLinear(sourcePoint.pan, targetPoint.pan, amount);
+    point.gain = interpolateLinear(sourcePoint.gain, targetPoint.gain, amount);
+    point.waveTimbre.sinePhase = interpolateLinear(sourcePoint.waveTimbre.sinePhase, targetPoint.waveTimbre.sinePhase, amount);
+    point.waveTimbre.sawShape = interpolateLinear(sourcePoint.waveTimbre.sawShape, targetPoint.waveTimbre.sawShape, amount);
+    point.waveTimbre.squarePulseWidth = interpolateLinear(sourcePoint.waveTimbre.squarePulseWidth, targetPoint.waveTimbre.squarePulseWidth, amount);
+    point.waveTimbre.noiseTone = interpolateLinear(sourcePoint.waveTimbre.noiseTone, targetPoint.waveTimbre.noiseTone, amount);
+    point.waveMix.sine = interpolateLinear(sourcePoint.waveMix.sine, targetPoint.waveMix.sine, amount);
+    point.waveMix.saw = interpolateLinear(sourcePoint.waveMix.saw, targetPoint.waveMix.saw, amount);
+    point.waveMix.square = interpolateLinear(sourcePoint.waveMix.square, targetPoint.waveMix.square, amount);
+    point.waveMix.noise = interpolateLinear(sourcePoint.waveMix.noise, targetPoint.waveMix.noise, amount);
+
+    for (const auto target : pointdrone::domain::allModulationTargets)
+    {
+        auto& modulation = pointdrone::domain::modulationFor(point, target);
+        const auto& sourceModulation = pointdrone::domain::modulationFor(sourcePoint, target);
+        const auto& targetModulation = pointdrone::domain::modulationFor(targetPoint, target);
+        modulation.settings.amplitude = interpolateLinear(sourceModulation.settings.amplitude, targetModulation.settings.amplitude, amount);
+        modulation.settings.frequency = interpolateLinear(sourceModulation.settings.frequency, targetModulation.settings.frequency, amount);
+        modulation.settings.ease = interpolateLinear(sourceModulation.settings.ease, targetModulation.settings.ease, amount);
+        modulation.settings.slant = interpolateLinear(sourceModulation.settings.slant, targetModulation.settings.slant, amount);
+        modulation.settings.cyclic = interpolateLinear(sourceModulation.settings.cyclic, targetModulation.settings.cyclic, amount);
+        modulation.settings.jitter = interpolateLinear(sourceModulation.settings.jitter, targetModulation.settings.jitter, amount);
+    }
+
+    return point;
 }
 
 float triangleSample(const float sawSample)
@@ -237,6 +295,14 @@ juce::String EditorController::getSelectedPointId() const
     return selectedPointId;
 }
 
+void EditorController::clearActiveSnapshotPlayback(const bool keepActiveSlot)
+{
+    activeSnapshotMorph.reset();
+
+    if (! keepActiveSlot)
+        activeSnapshotSlotIndex.reset();
+}
+
 PointWavePreviewViewModel EditorController::getLiveWavePreviewViewModel(const pointdrone::audio::PointRuntimeTelemetry& telemetry)
 {
     syncSelectionWithState();
@@ -271,12 +337,14 @@ EditorViewState EditorController::getViewState()
         createWavePreviewViewModel(model, selectedPointId),
         createInspectorViewModel(model, selectedPointId),
         createMasterOutputViewModel(model),
+        createSnapshotControlsViewModel(model),
         createModulationPopupViewModel(model, selectedPointId, editingModulationTarget)
     };
 }
 
 void EditorController::handleChartBackgroundClicked(const float normalizedX, const float normalizedY)
 {
+    clearActiveSnapshotPlayback();
     const auto point = state.addPoint(pointdrone::core::xToFrequency(normalizedX),
                                       pointdrone::core::yToPan(normalizedY));
     selectedPointId = point.id;
@@ -290,6 +358,7 @@ void EditorController::handlePointClicked(const juce::String& pointId)
 
 void EditorController::handlePointDragged(const juce::String& pointId, const float normalizedX, const float normalizedY)
 {
+    clearActiveSnapshotPlayback();
     selectedPointId = pointId;
 
     if (! state.updatePointPosition(pointId,
@@ -302,6 +371,7 @@ void EditorController::handlePointDragged(const juce::String& pointId, const flo
 
 void EditorController::handlePointDoubleClicked(const juce::String& pointId)
 {
+    clearActiveSnapshotPlayback();
     if (! state.removePoint(pointId))
         return;
 
@@ -311,6 +381,7 @@ void EditorController::handlePointDoubleClicked(const juce::String& pointId)
 
 void EditorController::handleWaveTimbreChanged(const pointdrone::domain::WaveTimbre& waveTimbre)
 {
+    clearActiveSnapshotPlayback();
     syncSelectionWithState();
 
     if (selectedPointId.isNotEmpty())
@@ -319,6 +390,7 @@ void EditorController::handleWaveTimbreChanged(const pointdrone::domain::WaveTim
 
 void EditorController::handleWaveMixChanged(const pointdrone::domain::WaveMix& waveMix)
 {
+    clearActiveSnapshotPlayback();
     syncSelectionWithState();
 
     if (selectedPointId.isNotEmpty())
@@ -327,6 +399,7 @@ void EditorController::handleWaveMixChanged(const pointdrone::domain::WaveMix& w
 
 void EditorController::handleGainChanged(const float gain)
 {
+    clearActiveSnapshotPlayback();
     syncSelectionWithState();
 
     if (selectedPointId.isNotEmpty())
@@ -375,6 +448,7 @@ void EditorController::handleModulationPopupClosed()
 
 void EditorController::handleModulationSettingsChanged(const pointdrone::domain::ModulationSettings& settings)
 {
+    clearActiveSnapshotPlayback();
     syncSelectionWithState();
 
     if (selectedPointId.isEmpty() || ! editingModulationTarget.has_value())
@@ -385,10 +459,91 @@ void EditorController::handleModulationSettingsChanged(const pointdrone::domain:
 
 void EditorController::handleSnapAllPointsToSemitone()
 {
+    clearActiveSnapshotPlayback();
     const auto model = state.getModel();
 
     for (const auto& point : model.points)
         state.updatePointPosition(point.id, snappedSemitoneFrequency(point.frequencyHz), point.pan);
+}
+
+void EditorController::handleSnapshotSlotPressed(const int slotIndex, const bool saveRequested)
+{
+    if (slotIndex < 0 || slotIndex >= static_cast<int>(pointdrone::domain::snapshotSlotCount))
+        return;
+
+    if (saveRequested)
+    {
+        state.saveSnapshotSlot(slotIndex);
+        return;
+    }
+
+    const auto model = state.getModel();
+    const auto targetSnapshot = model.snapshots[static_cast<std::size_t>(slotIndex)];
+
+    if (! targetSnapshot.hasData)
+        return;
+
+    activeSnapshotSlotIndex = slotIndex;
+
+    if (model.snapshotTransitionSeconds <= 0.0f)
+    {
+        clearActiveSnapshotPlayback(true);
+        state.applySnapshotPoints(targetSnapshot.points);
+        return;
+    }
+
+    SnapshotMorphState morphState;
+    morphState.targetSlotIndex = slotIndex;
+    morphState.durationSeconds = model.snapshotTransitionSeconds;
+
+    for (const auto& point : model.points)
+    {
+        if (const auto targetPoint = pointById(targetSnapshot.points, point.id); targetPoint.has_value())
+        {
+            morphState.sourcePoints.push_back(point);
+            morphState.targetPoints.push_back(*targetPoint);
+        }
+    }
+
+    if (morphState.sourcePoints.empty())
+    {
+        clearActiveSnapshotPlayback(true);
+        return;
+    }
+
+    activeSnapshotMorph = std::move(morphState);
+}
+
+void EditorController::handleSnapshotTransitionSecondsChanged(const float seconds)
+{
+    state.updateSnapshotTransitionSeconds(juce::jlimit(0.0f, maximumSnapshotTransitionSeconds, seconds));
+}
+
+bool EditorController::advanceSnapshotMorph(const double deltaSeconds)
+{
+    if (! activeSnapshotMorph.has_value())
+        return false;
+
+    auto& morphState = *activeSnapshotMorph;
+    morphState.elapsedSeconds = juce::jmin(morphState.durationSeconds,
+                                           morphState.elapsedSeconds + static_cast<float>(juce::jmax(0.0, deltaSeconds)));
+
+    const auto amount = morphState.durationSeconds <= 0.0f
+        ? 1.0f
+        : juce::jlimit(0.0f, 1.0f, morphState.elapsedSeconds / morphState.durationSeconds);
+
+    std::vector<pointdrone::domain::PointModel> interpolatedPoints;
+    interpolatedPoints.reserve(morphState.sourcePoints.size());
+
+    for (std::size_t index = 0; index < morphState.sourcePoints.size(); ++index)
+        interpolatedPoints.push_back(interpolatePoint(morphState.sourcePoints[index], morphState.targetPoints[index], amount));
+
+    const auto changed = state.applySnapshotPoints(interpolatedPoints);
+
+    if (amount >= 1.0f)
+        activeSnapshotMorph.reset();
+
+    return changed;
 }
 
 bool EditorController::handleFrequencyInputSubmitted(const juce::String& text)
@@ -405,7 +560,11 @@ bool EditorController::handleFrequencyInputSubmitted(const juce::String& text)
     if (! selectedPoint.has_value() || ! parsedFrequency.has_value())
         return false;
 
-    return state.updatePointPosition(selectedPointId, *parsedFrequency, selectedPoint->pan);
+    if (! state.updatePointPosition(selectedPointId, *parsedFrequency, selectedPoint->pan))
+        return false;
+
+    clearActiveSnapshotPlayback();
+    return true;
 }
 
 bool EditorController::handlePanInputSubmitted(const juce::String& text)
@@ -422,7 +581,11 @@ bool EditorController::handlePanInputSubmitted(const juce::String& text)
     if (! selectedPoint.has_value() || ! parsedPan.has_value())
         return false;
 
-    return state.updatePointPosition(selectedPointId, selectedPoint->frequencyHz, *parsedPan);
+    if (! state.updatePointPosition(selectedPointId, selectedPoint->frequencyHz, *parsedPan))
+        return false;
+
+    clearActiveSnapshotPlayback();
+    return true;
 }
 
 void EditorController::syncSelectionWithState()
@@ -538,6 +701,22 @@ MasterOutputViewModel EditorController::createMasterOutputViewModel(const pointd
 {
     MasterOutputViewModel viewModel;
     viewModel.gain = model.outputGain;
+    return viewModel;
+}
+
+SnapshotControlsViewModel EditorController::createSnapshotControlsViewModel(const pointdrone::domain::ProjectModel& model) const
+{
+    SnapshotControlsViewModel viewModel;
+    viewModel.transitionSeconds = model.snapshotTransitionSeconds;
+
+    for (std::size_t slotIndex = 0; slotIndex < pointdrone::domain::snapshotSlotCount; ++slotIndex)
+    {
+        viewModel.slots[slotIndex].slotIndex = static_cast<int>(slotIndex);
+        viewModel.slots[slotIndex].hasData = model.snapshots[slotIndex].hasData;
+        viewModel.slots[slotIndex].isActive = activeSnapshotSlotIndex.has_value() && *activeSnapshotSlotIndex == static_cast<int>(slotIndex);
+        viewModel.slots[slotIndex].label = "[" + juce::String(static_cast<int>(slotIndex) + 1) + "]";
+    }
+
     return viewModel;
 }
 

@@ -7,6 +7,8 @@
 #include "../ui/MasterOutputStrip.h"
 #include "../ui/ModulationPopup.h"
 #include "../ui/PointWavePreview.h"
+#include "../ui/SnapshotSlots.h"
+#include "../ui/SnapshotTransitionStrip.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
@@ -35,6 +37,8 @@ private:
     pointdrone::ui::AppLookAndFeel lookAndFeel;
     pointdrone::controller::EditorController controller;
     juce::TextButton snapToSemitoneButton;
+    pointdrone::ui::SnapshotSlots snapshotSlots;
+    pointdrone::ui::SnapshotTransitionStrip snapshotTransitionStrip;
     pointdrone::ui::ChartComponent chartComponent;
     pointdrone::ui::PointWavePreview pointWavePreview;
     pointdrone::ui::InspectorPanel inspectorPanel;
@@ -42,5 +46,6 @@ private:
     pointdrone::ui::ModulationPopup modulationPopup;
     juce::String cachedTelemetryPointId;
     std::optional<pointdrone::audio::PointRuntimeTelemetry> cachedTelemetry;
+    double lastTimerTimestampMs = 0.0;
 };
 }

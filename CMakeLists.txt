@@ -21,13 +21,19 @@ juce_add_plugin(PointDrone
     FORMATS AU VST3 Standalone
     PRODUCT_NAME "Point Drone"
     IS_SYNTH TRUE
-    NEEDS_MIDI_INPUT FALSE
+    NEEDS_MIDI_INPUT TRUE
     NEEDS_MIDI_OUTPUT FALSE
     IS_MIDI_EFFECT FALSE
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE
     COPY_PLUGIN_AFTER_BUILD FALSE
     VST3_CATEGORIES Instrument Synth
 )
+
+add_library(point_drone_vst_AU ALIAS PointDrone_AU)
+add_library(point_drone_vst_VST3 ALIAS PointDrone_VST3)
+
+set(PLUGINVAL_VST3_VALIDATOR OFF CACHE BOOL "" FORCE)
+add_subdirectory(modules/pluginval)
 
 juce_generate_juce_header(PointDrone)
 
@@ -66,6 +72,10 @@ target_sources(PointDrone
         source/ui/ModulationPopup.h
         source/ui/PointWavePreview.cpp
         source/ui/PointWavePreview.h
+        source/ui/SnapshotSlots.cpp
+        source/ui/SnapshotSlots.h
+        source/ui/SnapshotTransitionStrip.cpp
+        source/ui/SnapshotTransitionStrip.h
         source/ui/WaveMixSliders.cpp
         source/ui/WaveMixSliders.h
 )
@@ -97,4 +107,22 @@ target_compile_definitions(PointDrone
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0
         JUCE_VST3_CAN_REPLACE_VST2=0
+)
+
+get_target_property(POINTDRONE_VST3_ARTEFACT PointDrone_VST3 JUCE_PLUGIN_ARTEFACT_FILE)
+
+if(APPLE)
+    add_custom_command(TARGET PointDrone_VST3 POST_BUILD
+        COMMAND /usr/bin/codesign --force --deep --sign - "${POINTDRONE_VST3_ARTEFACT}"
+        VERBATIM
+    )
+endif()
+
+add_custom_target(validate_vst3
+    COMMAND $<TARGET_FILE:pluginval>
+        --validate "${POINTDRONE_VST3_ARTEFACT}"
+        --strictness-level 5
+    DEPENDS pluginval PointDrone_VST3
+    COMMENT "Validate Point Drone VST3 with pluginval"
+    USES_TERMINAL
 )

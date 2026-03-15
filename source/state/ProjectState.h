@@ -4,6 +4,8 @@
 
 #include <juce_data_structures/juce_data_structures.h>
 
+#include <optional>
+
 namespace pointdrone::state
 {
 class ProjectState
@@ -24,6 +26,10 @@ public:
                                        const domain::ModulationSettings& settings);
     bool updatePointWaveTimbre(const juce::String& pointId, const domain::WaveTimbre& waveTimbre);
     bool updatePointWaveMix(const juce::String& pointId, const domain::WaveMix& waveMix);
+    bool updateSnapshotTransitionSeconds(float seconds);
+    bool saveSnapshotSlot(int slotIndex);
+    std::optional<domain::SnapshotModel> getSnapshotSlot(int slotIndex) const;
+    bool applySnapshotPoints(const std::vector<domain::PointModel>& points);
     bool containsPoint(const juce::String& pointId) const;
 
     juce::ValueTree copyState() const;
@@ -38,6 +44,8 @@ private:
     static juce::Identifier snapshotsType();
     static juce::Identifier snapshotType();
     static juce::Identifier idProperty();
+    static juce::Identifier slotProperty();
+    static juce::Identifier hasDataProperty();
     static juce::Identifier targetProperty();
     static juce::Identifier enabledProperty();
     static juce::Identifier amplitudeProperty();
@@ -59,6 +67,7 @@ private:
     static juce::Identifier squareProperty();
     static juce::Identifier noiseProperty();
     static juce::Identifier nameProperty();
+    static juce::Identifier snapshotTransitionSecondsProperty();
 
     static domain::PointModel pointFromValueTree(const juce::ValueTree& pointTree);
     static juce::ValueTree pointToValueTree(const domain::PointModel& point, bool includeModulationEnabled = true);
@@ -68,6 +77,7 @@ private:
 
     juce::ValueTree pointsTree() const;
     juce::ValueTree snapshotsTree() const;
+    juce::ValueTree snapshotTreeForSlot(int slotIndex) const;
 
     mutable juce::CriticalSection mutex;
     juce::ValueTree rootState;

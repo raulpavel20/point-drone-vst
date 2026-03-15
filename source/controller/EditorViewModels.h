@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../domain/PointModel.h"
+#include "../domain/SnapshotModel.h"
 
 #include <array>
 #include <vector>
@@ -52,6 +53,20 @@ struct MasterOutputViewModel
     float gain = 1.0f;
 };
 
+struct SnapshotSlotViewModel
+{
+    int slotIndex = 0;
+    bool hasData = false;
+    bool isActive = false;
+    juce::String label;
+};
+
+struct SnapshotControlsViewModel
+{
+    std::array<SnapshotSlotViewModel, pointdrone::domain::snapshotSlotCount> slots;
+    float transitionSeconds = 0.0f;
+};
+
 struct ModulationPopupViewModel
 {
     bool visible = false;
@@ -66,6 +81,7 @@ struct EditorViewState
     PointWavePreviewViewModel wavePreview;
     InspectorViewModel inspector;
     MasterOutputViewModel masterOutput;
+    SnapshotControlsViewModel snapshotControls;
     ModulationPopupViewModel modulationPopup;
 };
 }

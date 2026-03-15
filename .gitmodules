@@ -1,3 +1,7 @@
 [submodule "JUCE"]
 	path = JUCE
 	url = https://github.com/juce-framework/JUCE.git
+[submodule "modules/pluginval"]
+	path = modules/pluginval
+	url = https://github.com/Tracktion/pluginval.git
+	branch = develop
