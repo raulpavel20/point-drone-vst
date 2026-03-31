@@ -220,6 +220,15 @@ void PointDroneAudioProcessorEditor::timerCallback()
     if (controller.advanceSnapshotMorph(deltaSeconds))
         refreshViews();
 
+    const auto rawInteractions = audioProcessor.getResonanceInteractions();
+    std::vector<pointdrone::controller::ChartInteractionViewModel> chartInteractions;
+    chartInteractions.reserve(rawInteractions.size());
+
+    for (const auto& ri : rawInteractions)
+        chartInteractions.push_back({ ri.pointIdA, ri.pointIdB, ri.strength });
+
+    chartComponent.setInteractions(std::move(chartInteractions));
+
     const auto selectedPointId = controller.getSelectedPointId();
 
     if (const auto telemetry = audioProcessor.getPointRuntimeTelemetry(selectedPointId); telemetry.has_value())

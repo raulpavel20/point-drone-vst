@@ -2,6 +2,7 @@
 
 #include "../audio/PointRenderer.h"
 #include "../audio/PointRuntimeTelemetry.h"
+#include "../audio/ResonanceInteraction.h"
 #include "../state/ProjectState.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -9,6 +10,7 @@
 #include <array>
 #include <atomic>
 #include <optional>
+#include <vector>
 
 namespace pointdrone::plugin
 {
@@ -43,6 +45,7 @@ public:
     pointdrone::state::ProjectState& getProjectState();
     std::array<float, 2> getOutputMeterLevels() const;
     std::optional<pointdrone::audio::PointRuntimeTelemetry> getPointRuntimeTelemetry(const juce::String& pointId) const;
+    std::vector<pointdrone::audio::ResonanceInteraction> getResonanceInteractions() const;
 
 private:
     std::atomic<float> leftMeterLevel = 0.0f;

@@ -137,6 +137,11 @@ std::optional<pointdrone::audio::PointRuntimeTelemetry> PointDroneAudioProcessor
 
     return renderer.getRuntimeTelemetry(pointId);
 }
+
+std::vector<pointdrone::audio::ResonanceInteraction> PointDroneAudioProcessor::getResonanceInteractions() const
+{
+    return renderer.getResonanceInteractions();
+}
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

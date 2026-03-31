@@ -39,10 +39,14 @@ juce_generate_juce_header(PointDrone)
 
 target_sources(PointDrone
     PRIVATE
+        source/audio/GhostVoice.cpp
+        source/audio/GhostVoice.h
+        source/audio/HarmonicAnalyzer.h
         source/audio/PointRenderer.cpp
         source/audio/PointRenderer.h
         source/audio/PointVoice.cpp
         source/audio/PointVoice.h
+        source/audio/ResonanceInteraction.h
         source/controller/EditorController.cpp
         source/controller/EditorController.h
         source/controller/EditorViewModels.h

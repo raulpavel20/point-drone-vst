@@ -16,9 +16,17 @@ struct ChartPointViewModel
     bool isSelected = false;
 };
 
+struct ChartInteractionViewModel
+{
+    juce::String pointIdA;
+    juce::String pointIdB;
+    float strength = 0.0f;
+};
+
 struct ChartViewModel
 {
     std::vector<ChartPointViewModel> points;
+    std::vector<ChartInteractionViewModel> interactions;
 };
 
 struct PointWavePreviewViewModel

@@ -1,10 +1,22 @@
 #include "PointRenderer.h"
 
+#include "HarmonicAnalyzer.h"
+
+#include <algorithm>
 #include <cmath>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace pointdrone::audio
 {
+namespace
+{
+float averagePan(float panA, float panB)
+{
+    return (panA + panB) * 0.5f;
+}
+}
+
 void PointRenderer::prepare(const double sampleRate, int)
 {
     currentSampleRate = sampleRate;
@@ -14,6 +26,9 @@ void PointRenderer::prepare(const double sampleRate, int)
 
     for (auto& [_, voice] : voices)
         voice.prepare(sampleRate);
+
+    for (auto& ghost : ghostVoices)
+        ghost.prepare(sampleRate);
 }
 
 void PointRenderer::render(const domain::ProjectModel& model, juce::AudioBuffer<float>& outputBuffer)
@@ -45,9 +60,40 @@ void PointRenderer::render(const domain::ProjectModel& model, juce::AudioBuffer<
         return ! activeVoiceIds.contains(item.first);
     });
 
+    auto interactions = HarmonicAnalyzer::computeInteractions(model.points);
+
+    std::sort(interactions.begin(), interactions.end(), [](const auto& a, const auto& b)
+    {
+        return a.strength > b.strength;
+    });
+
+    std::unordered_map<std::string, float> panByPointId;
+    for (const auto& point : model.points)
+        panByPointId[point.id.toStdString()] = point.pan;
+
+    const auto interactionsToAssign = std::min(static_cast<int>(interactions.size()), ghostVoicePoolSize);
+
+    for (int i = 0; i < interactionsToAssign; ++i)
+    {
+        const auto& interaction = interactions[static_cast<std::size_t>(i)];
+        const auto panA = panByPointId[interaction.pointIdA.toStdString()];
+        const auto panB = panByPointId[interaction.pointIdB.toStdString()];
+        ghostVoices[static_cast<std::size_t>(i)].assign(
+            interaction.differenceToneHz,
+            interaction.strength,
+            averagePan(panA, panB));
+    }
+
+    for (int i = interactionsToAssign; i < ghostVoicePoolSize; ++i)
+        ghostVoices[static_cast<std::size_t>(i)].release();
+
+    for (auto& ghost : ghostVoices)
+        ghost.render(outputBuffer, outputBuffer.getNumSamples());
+
     {
         const juce::SpinLock::ScopedLockType lock(runtimeTelemetryLock);
         runtimeTelemetry = std::move(nextRuntimeTelemetry);
+        resonanceInteractions = std::move(interactions);
     }
 
     const auto pointCount = static_cast<float>(juce::jmax(1, static_cast<int>(model.points.size())));
@@ -75,5 +121,11 @@ std::optional<PointRuntimeTelemetry> PointRenderer::getRuntimeTelemetry(const ju
         return std::nullopt;
 
     return iterator->second;
+}
+
+std::vector<ResonanceInteraction> PointRenderer::getResonanceInteractions() const
+{
+    const juce::SpinLock::ScopedLockType lock(runtimeTelemetryLock);
+    return resonanceInteractions;
 }
 }

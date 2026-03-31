@@ -18,6 +18,7 @@ public:
     void mouseUp(const juce::MouseEvent& event) override;
 
     void setViewModel(pointdrone::controller::ChartViewModel newViewModel);
+    void setInteractions(std::vector<pointdrone::controller::ChartInteractionViewModel> newInteractions);
 
     std::function<void(float, float)> onBackgroundClicked;
     std::function<void(juce::String)> onPointClicked;
@@ -39,6 +40,7 @@ private:
     juce::Point<float> normalizedPosition(juce::Point<float> position) const;
 
     pointdrone::controller::ChartViewModel viewModel;
+    std::vector<pointdrone::controller::ChartInteractionViewModel> interactions;
     std::optional<juce::String> draggedPointId;
     std::optional<juce::Point<float>> dragStartPosition;
     DragAxisLock dragAxisLock = DragAxisLock::none;
