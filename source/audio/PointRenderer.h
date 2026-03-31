@@ -7,6 +7,7 @@
 #include "ResonanceInteraction.h"
 
 #include <juce_audio_basics/juce_audio_basics.h>
+#include <juce_dsp/juce_dsp.h>
 
 #include <optional>
 #include <unordered_map>
@@ -30,6 +31,8 @@ private:
     juce::SmoothedValue<float> outputGain;
     std::unordered_map<std::string, PointVoice> voices;
     std::array<GhostVoice, ghostVoicePoolSize> ghostVoices;
+    juce::dsp::Chorus<float> chorus;
+    juce::Reverb reverb;
     mutable juce::SpinLock runtimeTelemetryLock;
     std::unordered_map<std::string, PointRuntimeTelemetry> runtimeTelemetry;
     std::vector<ResonanceInteraction> resonanceInteractions;

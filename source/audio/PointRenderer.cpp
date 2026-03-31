@@ -17,7 +17,7 @@ float averagePan(float panA, float panB)
 }
 }
 
-void PointRenderer::prepare(const double sampleRate, int)
+void PointRenderer::prepare(const double sampleRate, const int maximumExpectedSamplesPerBlock)
 {
     currentSampleRate = sampleRate;
     hasPrepared = true;
@@ -29,6 +29,18 @@ void PointRenderer::prepare(const double sampleRate, int)
 
     for (auto& ghost : ghostVoices)
         ghost.prepare(sampleRate);
+
+    juce::dsp::ProcessSpec spec{};
+    spec.sampleRate = sampleRate;
+    spec.maximumBlockSize = static_cast<juce::uint32>(maximumExpectedSamplesPerBlock);
+    spec.numChannels = 2;
+
+    chorus.prepare(spec);
+    chorus.setCentreDelay(7.0f);
+    chorus.setFeedback(0.0f);
+    chorus.reset();
+
+    reverb.setSampleRate(sampleRate);
 }
 
 void PointRenderer::render(const domain::ProjectModel& model, juce::AudioBuffer<float>& outputBuffer)
@@ -109,6 +121,36 @@ void PointRenderer::render(const domain::ProjectModel& model, juce::AudioBuffer<
             auto* channelData = outputBuffer.getWritePointer(channel);
             channelData[sampleIndex] = std::tanh(channelData[sampleIndex] * gain);
         }
+    }
+
+    chorus.setRate(model.chorusRate * 10.0f);
+    chorus.setDepth(model.chorusDepth);
+    chorus.setMix(model.chorusMix);
+
+    juce::dsp::AudioBlock<float> chorusBlock(outputBuffer);
+    juce::dsp::ProcessContextReplacing<float> chorusContext(chorusBlock);
+    chorus.process(chorusContext);
+
+    const auto mix = juce::jlimit(0.0f, 1.0f, model.reverbMix);
+    juce::Reverb::Parameters reverbParams;
+    reverbParams.roomSize = juce::jlimit(0.0f, 1.0f, model.reverbSize);
+    reverbParams.damping = juce::jlimit(0.0f, 1.0f, model.reverbDamping);
+    reverbParams.wetLevel = mix;
+    reverbParams.dryLevel = 1.0f - mix;
+    reverbParams.width = 1.0f;
+    reverbParams.freezeMode = 0.0f;
+    reverb.setParameters(reverbParams);
+
+    if (outputBuffer.getNumChannels() >= 2)
+    {
+        reverb.processStereo(outputBuffer.getWritePointer(0),
+                             outputBuffer.getWritePointer(1),
+                             outputBuffer.getNumSamples());
+    }
+    else if (outputBuffer.getNumChannels() == 1)
+    {
+        reverb.processMono(outputBuffer.getWritePointer(0),
+                           outputBuffer.getNumSamples());
     }
 }
 

@@ -78,7 +78,7 @@ bool PointDroneAudioProcessor::isMidiEffect() const
 
 double PointDroneAudioProcessor::getTailLengthSeconds() const
 {
-    return 0.0;
+    return 2.0;
 }
 
 int PointDroneAudioProcessor::getNumPrograms()

@@ -336,6 +336,7 @@ EditorViewState EditorController::getViewState()
         createChartViewModel(model, selectedPointId),
         createWavePreviewViewModel(model, selectedPointId),
         createInspectorViewModel(model, selectedPointId),
+        createFieldViewModel(model),
         createMasterOutputViewModel(model),
         createSnapshotControlsViewModel(model),
         createModulationPopupViewModel(model, selectedPointId, editingModulationTarget)
@@ -409,6 +410,36 @@ void EditorController::handleGainChanged(const float gain)
 void EditorController::handleOutputGainChanged(const float gain)
 {
     state.updateOutputGain(gain);
+}
+
+void EditorController::handleChorusRateChanged(const float rate)
+{
+    state.updateChorusRate(rate);
+}
+
+void EditorController::handleChorusDepthChanged(const float depth)
+{
+    state.updateChorusDepth(depth);
+}
+
+void EditorController::handleChorusMixChanged(const float mix)
+{
+    state.updateChorusMix(mix);
+}
+
+void EditorController::handleReverbMixChanged(const float mix)
+{
+    state.updateReverbMix(mix);
+}
+
+void EditorController::handleReverbSizeChanged(const float size)
+{
+    state.updateReverbSize(size);
+}
+
+void EditorController::handleReverbDampingChanged(const float damping)
+{
+    state.updateReverbDamping(damping);
 }
 
 void EditorController::handleModulationRequested(const pointdrone::domain::ModulationTarget target)
@@ -694,6 +725,18 @@ InspectorViewModel EditorController::createInspectorViewModel(const pointdrone::
 
     viewModel.frequencyText = frequencyText(selectedPoint);
     viewModel.panText = panText(selectedPoint);
+    return viewModel;
+}
+
+FieldViewModel EditorController::createFieldViewModel(const pointdrone::domain::ProjectModel& model)
+{
+    FieldViewModel viewModel;
+    viewModel.chorusRate = model.chorusRate;
+    viewModel.chorusDepth = model.chorusDepth;
+    viewModel.chorusMix = model.chorusMix;
+    viewModel.reverbMix = model.reverbMix;
+    viewModel.reverbSize = model.reverbSize;
+    viewModel.reverbDamping = model.reverbDamping;
     return viewModel;
 }
 

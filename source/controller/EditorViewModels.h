@@ -56,6 +56,16 @@ struct InspectorViewModel
     juce::String panText = "[PAN --]";
 };
 
+struct FieldViewModel
+{
+    float chorusRate = 1.0f;
+    float chorusDepth = 0.0f;
+    float chorusMix = 0.0f;
+    float reverbMix = 0.0f;
+    float reverbSize = 0.5f;
+    float reverbDamping = 0.5f;
+};
+
 struct MasterOutputViewModel
 {
     float gain = 1.0f;
@@ -88,6 +98,7 @@ struct EditorViewState
     ChartViewModel chart;
     PointWavePreviewViewModel wavePreview;
     InspectorViewModel inspector;
+    FieldViewModel field;
     MasterOutputViewModel masterOutput;
     SnapshotControlsViewModel snapshotControls;
     ModulationPopupViewModel modulationPopup;

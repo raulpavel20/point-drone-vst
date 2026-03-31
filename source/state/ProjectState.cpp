@@ -51,6 +51,12 @@ domain::ProjectModel ProjectState::getModel() const
 
     domain::ProjectModel model;
     model.outputGain = static_cast<float>(rootState.getProperty(outputGainProperty(), 1.0f));
+    model.chorusRate = static_cast<float>(rootState.getProperty(chorusRateProperty(), 1.0f));
+    model.chorusDepth = static_cast<float>(rootState.getProperty(chorusDepthProperty(), 0.0f));
+    model.chorusMix = static_cast<float>(rootState.getProperty(chorusMixProperty(), 0.0f));
+    model.reverbMix = static_cast<float>(rootState.getProperty(reverbMixProperty(), 0.0f));
+    model.reverbSize = static_cast<float>(rootState.getProperty(reverbSizeProperty(), 0.5f));
+    model.reverbDamping = static_cast<float>(rootState.getProperty(reverbDampingProperty(), 0.5f));
     model.snapshotTransitionSeconds = static_cast<float>(rootState.getProperty(snapshotTransitionSecondsProperty(), 0.0f));
 
     for (std::size_t slotIndex = 0; slotIndex < domain::snapshotSlotCount; ++slotIndex)
@@ -120,6 +126,48 @@ bool ProjectState::updateOutputGain(const float outputGain)
 {
     const juce::ScopedLock lock(mutex);
     rootState.setProperty(outputGainProperty(), outputGain, nullptr);
+    return true;
+}
+
+bool ProjectState::updateChorusRate(const float rate)
+{
+    const juce::ScopedLock lock(mutex);
+    rootState.setProperty(chorusRateProperty(), juce::jlimit(0.0f, 1.0f, rate), nullptr);
+    return true;
+}
+
+bool ProjectState::updateChorusDepth(const float depth)
+{
+    const juce::ScopedLock lock(mutex);
+    rootState.setProperty(chorusDepthProperty(), juce::jlimit(0.0f, 1.0f, depth), nullptr);
+    return true;
+}
+
+bool ProjectState::updateChorusMix(const float mix)
+{
+    const juce::ScopedLock lock(mutex);
+    rootState.setProperty(chorusMixProperty(), juce::jlimit(0.0f, 1.0f, mix), nullptr);
+    return true;
+}
+
+bool ProjectState::updateReverbMix(const float mix)
+{
+    const juce::ScopedLock lock(mutex);
+    rootState.setProperty(reverbMixProperty(), juce::jlimit(0.0f, 1.0f, mix), nullptr);
+    return true;
+}
+
+bool ProjectState::updateReverbSize(const float size)
+{
+    const juce::ScopedLock lock(mutex);
+    rootState.setProperty(reverbSizeProperty(), juce::jlimit(0.0f, 1.0f, size), nullptr);
+    return true;
+}
+
+bool ProjectState::updateReverbDamping(const float damping)
+{
+    const juce::ScopedLock lock(mutex);
+    rootState.setProperty(reverbDampingProperty(), juce::jlimit(0.0f, 1.0f, damping), nullptr);
     return true;
 }
 
@@ -351,6 +399,24 @@ void ProjectState::replaceState(const juce::ValueTree& newState)
     if (! rootState.hasProperty(outputGainProperty()))
         rootState.setProperty(outputGainProperty(), 1.0f, nullptr);
 
+    if (! rootState.hasProperty(chorusRateProperty()))
+        rootState.setProperty(chorusRateProperty(), 1.0f, nullptr);
+
+    if (! rootState.hasProperty(chorusDepthProperty()))
+        rootState.setProperty(chorusDepthProperty(), 0.0f, nullptr);
+
+    if (! rootState.hasProperty(chorusMixProperty()))
+        rootState.setProperty(chorusMixProperty(), 0.0f, nullptr);
+
+    if (! rootState.hasProperty(reverbMixProperty()))
+        rootState.setProperty(reverbMixProperty(), 0.0f, nullptr);
+
+    if (! rootState.hasProperty(reverbSizeProperty()))
+        rootState.setProperty(reverbSizeProperty(), 0.5f, nullptr);
+
+    if (! rootState.hasProperty(reverbDampingProperty()))
+        rootState.setProperty(reverbDampingProperty(), 0.5f, nullptr);
+
     if (! rootState.hasProperty(snapshotTransitionSecondsProperty()))
         rootState.setProperty(snapshotTransitionSecondsProperty(), 0.0f, nullptr);
 
@@ -419,6 +485,12 @@ juce::Identifier ProjectState::sawProperty() { return "saw"; }
 juce::Identifier ProjectState::squareProperty() { return "square"; }
 juce::Identifier ProjectState::noiseProperty() { return "noise"; }
 juce::Identifier ProjectState::nameProperty() { return "name"; }
+juce::Identifier ProjectState::chorusRateProperty() { return "chorusRate"; }
+juce::Identifier ProjectState::chorusDepthProperty() { return "chorusDepth"; }
+juce::Identifier ProjectState::chorusMixProperty() { return "chorusMix"; }
+juce::Identifier ProjectState::reverbMixProperty() { return "reverbMix"; }
+juce::Identifier ProjectState::reverbSizeProperty() { return "reverbSize"; }
+juce::Identifier ProjectState::reverbDampingProperty() { return "reverbDamping"; }
 juce::Identifier ProjectState::snapshotTransitionSecondsProperty() { return "snapshotTransitionSeconds"; }
 
 domain::PointModel ProjectState::pointFromValueTree(const juce::ValueTree& pointTree)
@@ -535,6 +607,12 @@ juce::ValueTree ProjectState::createDefaultState()
 {
     juce::ValueTree project(projectType());
     project.setProperty(outputGainProperty(), 1.0f, nullptr);
+    project.setProperty(chorusRateProperty(), 1.0f, nullptr);
+    project.setProperty(chorusDepthProperty(), 0.0f, nullptr);
+    project.setProperty(chorusMixProperty(), 0.0f, nullptr);
+    project.setProperty(reverbMixProperty(), 0.0f, nullptr);
+    project.setProperty(reverbSizeProperty(), 0.5f, nullptr);
+    project.setProperty(reverbDampingProperty(), 0.5f, nullptr);
     project.setProperty(snapshotTransitionSecondsProperty(), 0.0f, nullptr);
     project.appendChild(juce::ValueTree(pointsType()), nullptr);
 

@@ -25,6 +25,12 @@ public:
     void handleWaveMixChanged(const pointdrone::domain::WaveMix& waveMix);
     void handleGainChanged(float gain);
     void handleOutputGainChanged(float gain);
+    void handleChorusRateChanged(float rate);
+    void handleChorusDepthChanged(float depth);
+    void handleChorusMixChanged(float mix);
+    void handleReverbMixChanged(float mix);
+    void handleReverbSizeChanged(float size);
+    void handleReverbDampingChanged(float damping);
     void handleModulationRequested(pointdrone::domain::ModulationTarget target);
     void handleModulationDisabled();
     void handleModulationPopupClosed();
@@ -53,6 +59,7 @@ private:
     static PointWavePreviewViewModel createWavePreviewViewModel(const pointdrone::domain::ProjectModel& model, const juce::String& selectedPointId);
     static PointWavePreviewViewModel createWavePreviewViewModel(const pointdrone::domain::PointModel& point);
     static InspectorViewModel createInspectorViewModel(const pointdrone::domain::ProjectModel& model, const juce::String& selectedPointId);
+    static FieldViewModel createFieldViewModel(const pointdrone::domain::ProjectModel& model);
     static MasterOutputViewModel createMasterOutputViewModel(const pointdrone::domain::ProjectModel& model);
     SnapshotControlsViewModel createSnapshotControlsViewModel(const pointdrone::domain::ProjectModel& model) const;
     static ModulationPopupViewModel createModulationPopupViewModel(const pointdrone::domain::ProjectModel& model,

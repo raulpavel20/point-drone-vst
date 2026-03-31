@@ -90,6 +90,37 @@ PointDroneAudioProcessorEditor::PointDroneAudioProcessorEditor(PointDroneAudioPr
         refreshViews();
     };
 
+    fieldStrip.onChorusRateChanged = [this](const float rate)
+    {
+        controller.handleChorusRateChanged(rate);
+        refreshViews();
+    };
+    fieldStrip.onChorusDepthChanged = [this](const float depth)
+    {
+        controller.handleChorusDepthChanged(depth);
+        refreshViews();
+    };
+    fieldStrip.onChorusMixChanged = [this](const float mix)
+    {
+        controller.handleChorusMixChanged(mix);
+        refreshViews();
+    };
+    fieldStrip.onReverbMixChanged = [this](const float mix)
+    {
+        controller.handleReverbMixChanged(mix);
+        refreshViews();
+    };
+    fieldStrip.onReverbSizeChanged = [this](const float size)
+    {
+        controller.handleReverbSizeChanged(size);
+        refreshViews();
+    };
+    fieldStrip.onReverbDampingChanged = [this](const float damping)
+    {
+        controller.handleReverbDampingChanged(damping);
+        refreshViews();
+    };
+
     masterOutputStrip.onGainChanged = [this](const float gain)
     {
         controller.handleOutputGainChanged(gain);
@@ -141,12 +172,13 @@ PointDroneAudioProcessorEditor::PointDroneAudioProcessorEditor(PointDroneAudioPr
     addAndMakeVisible(chartComponent);
     addAndMakeVisible(pointWavePreview);
     addAndMakeVisible(inspectorPanel);
+    addAndMakeVisible(fieldStrip);
     addAndMakeVisible(masterOutputStrip);
     addChildComponent(modulationPopup);
     addAndMakeVisible(snapToSemitoneButton);
     snapToSemitoneButton.toFront(false);
 
-    setSize(1160, 620);
+    setSize(1280, 620);
     refreshViews();
     startTimerHz(30);
 }
@@ -176,7 +208,9 @@ void PointDroneAudioProcessorEditor::resized()
 
     auto masterOutputBounds = bounds.removeFromRight(56);
     bounds.removeFromRight(12);
-    auto inspectorBounds = bounds.removeFromRight(300);
+    auto fieldStripBounds = bounds.removeFromRight(72);
+    bounds.removeFromRight(12);
+    auto inspectorBounds = bounds.removeFromRight(280);
     auto previewBounds = bounds.removeFromRight(110);
     auto chartBounds = bounds;
     auto snapshotSlotsBounds = chartBounds.removeFromLeft(54);
@@ -187,6 +221,7 @@ void PointDroneAudioProcessorEditor::resized()
     snapshotSlots.setBounds(snapshotSlotsBounds);
     snapshotTransitionStrip.setBounds(snapshotTransitionBounds);
     masterOutputStrip.setBounds(masterOutputBounds);
+    fieldStrip.setBounds(fieldStripBounds);
     inspectorPanel.setBounds(inspectorBounds);
     pointWavePreview.setBounds(previewBounds);
     chartComponent.setBounds(chartBounds);
@@ -199,6 +234,7 @@ void PointDroneAudioProcessorEditor::refreshViews()
     chartComponent.setViewModel(std::move(viewState.chart));
     pointWavePreview.setViewModel(std::move(viewState.wavePreview));
     inspectorPanel.setViewModel(std::move(viewState.inspector));
+    fieldStrip.setViewModel(std::move(viewState.field));
     masterOutputStrip.setViewModel(std::move(viewState.masterOutput));
     snapshotSlots.setViewModel(std::move(viewState.snapshotControls.slots));
     snapshotTransitionStrip.setTransitionSeconds(viewState.snapshotControls.transitionSeconds);

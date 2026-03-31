@@ -19,6 +19,12 @@ public:
     bool removePoint(const juce::String& pointId);
     bool updatePointPosition(const juce::String& pointId, float frequencyHz, float pan);
     bool updateOutputGain(float outputGain);
+    bool updateChorusRate(float rate);
+    bool updateChorusDepth(float depth);
+    bool updateChorusMix(float mix);
+    bool updateReverbMix(float mix);
+    bool updateReverbSize(float size);
+    bool updateReverbDamping(float damping);
     bool updatePointGain(const juce::String& pointId, float gain);
     bool updatePointModulationEnabled(const juce::String& pointId, domain::ModulationTarget target, bool enabled);
     bool updatePointModulationSettings(const juce::String& pointId,
@@ -67,6 +73,12 @@ private:
     static juce::Identifier squareProperty();
     static juce::Identifier noiseProperty();
     static juce::Identifier nameProperty();
+    static juce::Identifier chorusRateProperty();
+    static juce::Identifier chorusDepthProperty();
+    static juce::Identifier chorusMixProperty();
+    static juce::Identifier reverbMixProperty();
+    static juce::Identifier reverbSizeProperty();
+    static juce::Identifier reverbDampingProperty();
     static juce::Identifier snapshotTransitionSecondsProperty();
 
     static domain::PointModel pointFromValueTree(const juce::ValueTree& pointTree);

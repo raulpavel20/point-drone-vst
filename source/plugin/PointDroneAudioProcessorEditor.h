@@ -3,6 +3,7 @@
 #include "../controller/EditorController.h"
 #include "../ui/AppLookAndFeel.h"
 #include "../ui/ChartComponent.h"
+#include "../ui/FieldStrip.h"
 #include "../ui/InspectorPanel.h"
 #include "../ui/MasterOutputStrip.h"
 #include "../ui/ModulationPopup.h"
@@ -42,6 +43,7 @@ private:
     pointdrone::ui::ChartComponent chartComponent;
     pointdrone::ui::PointWavePreview pointWavePreview;
     pointdrone::ui::InspectorPanel inspectorPanel;
+    pointdrone::ui::FieldStrip fieldStrip;
     pointdrone::ui::MasterOutputStrip masterOutputStrip;
     pointdrone::ui::ModulationPopup modulationPopup;
     juce::String cachedTelemetryPointId;

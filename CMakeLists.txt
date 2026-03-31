@@ -67,6 +67,8 @@ target_sources(PointDrone
         source/ui/AppLookAndFeel.h
         source/ui/ChartComponent.cpp
         source/ui/ChartComponent.h
+        source/ui/FieldStrip.cpp
+        source/ui/FieldStrip.h
         source/ui/InspectorPanel.cpp
         source/ui/InspectorPanel.h
         source/ui/MasterOutputStrip.cpp
